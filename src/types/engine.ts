@@ -17,7 +17,7 @@ export interface AgentTurnInput {
 export interface AgentTurnOutput {
   reply: string;
   actionTaken?: {
-    type: "BOOKING_CREATED" | "CALENDAR_CHECKED" | "ESCALATED" | "INFO_PROVIDED";
+    type: "BOOKING_CREATED" | "CALENDAR_CHECKED" | "ESCALATED" | "INFO_PROVIDED" | "TOOL_CALL";
     details?: Record<string, unknown>;
     booking?: Booking;
   };

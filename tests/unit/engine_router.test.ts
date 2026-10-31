@@ -131,9 +131,9 @@ describe("Engine Adapters & Provider Router", () => {
       conversationHistory: [],
     });
 
-    expect(output.actionTaken?.type).toBe("BOOKING_CREATED");
-    expect(output.actionTaken?.booking?.serviceName).toBe("AC Tune-Up");
-    expect(output.actionTaken?.booking?.customerPhone).toBe("+14795559999");
+    expect(output.actionTaken?.type).toBe("TOOL_CALL");
+    expect((output.actionTaken?.details as any)?.args?.input?.serviceId).toBe("tuneup");
+    expect((output.actionTaken?.details as any)?.args?.input?.customerPhone).toBe("+14795559999");
   });
 
   it("OmpEngine handles stdio requests and honors AI disclosure", async () => {

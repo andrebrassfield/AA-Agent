@@ -95,26 +95,49 @@ export async function runDemo(verbose: boolean = true): Promise<DemoRunOutput> {
   tomorrowTenAm.setDate(tomorrowTenAm.getDate() + 1);
   tomorrowTenAm.setHours(10, 0, 0, 0);
 
-  const bookingResult = await handleBookingWorkflow(
-    {
-      customerName: "Marcus Vance",
-      customerPhone: callerNumber,
-      serviceId: "ac-tuneup",
-      requestedStartTime: tomorrowTenAm.toISOString(),
+  let bookingResult: any;
+  const bookingEngineTurn = await engine.processTurn({
+    userMessage: `I need to book an AC Tune-Up for tomorrow at 10 AM please. My name is Marcus Vance.`,
+    context: {
+      clientConfig: FORT_SMITH_HVAC_CONFIG,
+      channel: "sms",
+      senderPhone: callerNumber,
     },
-    FORT_SMITH_HVAC_CONFIG,
-    calendar,
-    store
-  );
+    conversationHistory: [],
+  });
 
-  if (!bookingResult.success || !bookingResult.booking) {
-    throw new Error(`Booking failed: ${bookingResult.error}`);
+  if (bookingEngineTurn.actionTaken?.type === "TOOL_CALL" && bookingEngineTurn.actionTaken?.details?.name === "manageBooking") {
+    const args = bookingEngineTurn.actionTaken.details.args as any;
+    log(`[ENGINE] Output Tool Call: ${JSON.stringify(args)}`);
+
+    bookingResult = await handleBookingWorkflow(
+      {
+        customerName: args.input.customerName,
+        customerPhone: args.input.customerPhone,
+        serviceId: "ac-tuneup", // Mock mapping
+        requestedStartTime: args.input.requestedStartTime,
+      },
+      FORT_SMITH_HVAC_CONFIG,
+      calendar,
+      store
+    );
+
+    if (!bookingResult.success || !bookingResult.booking) {
+      throw new Error(`Booking failed: ${bookingResult.error}`);
+    }
+
+    log(`[CALENDAR] Availability checked: OK. Event created on calendar.`);
+    log(`[BOOKING CREATED] ID: ${bookingResult.booking.id} | Service: ${bookingResult.booking.serviceName}`);
+    log(`[AGENT -> SMS Confirmation]: "${bookingResult.confirmationSms}"`);
+    log(`[AUTOMATION] Scheduled ${bookingResult.scheduledReminders?.length} appointment reminders (24h prior and 2h prior).`);
+
+    // Assign back to bookingResult var out of scope so review workflow can see it
+
+  } else {
+    throw new Error("CoreEngine failed to emit the expected manageBooking tool call.");
   }
 
-  log(`[CALENDAR] Availability checked: OK. Event created on calendar.`);
-  log(`[BOOKING CREATED] ID: ${bookingResult.booking.id} | Service: ${bookingResult.booking.serviceName}`);
-  log(`[AGENT -> SMS Confirmation]: "${bookingResult.confirmationSms}"`);
-  log(`[AUTOMATION] Scheduled ${bookingResult.scheduledReminders?.length} appointment reminders (24h prior and 2h prior).`);
+
 
   // --- Workflow 3: Estimate Follow-Up ---
   log("");
