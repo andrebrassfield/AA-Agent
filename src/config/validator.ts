@@ -20,7 +20,7 @@ export const DEFAULT_CHANNELS_CONFIG: ChannelsConfig = {
 };
 
 const TIME_24H_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
-const SECRET_VALUE_PATTERN = /^(?:sk-(?:proj-|ant-|or-v1-)?[A-Za-z0-9_-]{12,}|AIza[0-9A-Za-z_-]{20,}|nvapi-[A-Za-z0-9_-]{12,})$/;
+const SECRET_VALUE_PATTERN = /^(?:sk-(?:proj-|ant-|or-v1-)?[A-Za-z0-9_-]{12,}|AIza[0-9A-Za-z_-]{20,}|nvapi-[A-Za-z0-9_-]{12,}|AC[0-9a-fA-F]{32})$/;
 
 function isObject(val: unknown): val is Record<string, unknown> {
   return typeof val === "object" && val !== null && !Array.isArray(val);
@@ -88,7 +88,7 @@ export function collectSecretKeyIssues(value: unknown, pathPrefix: string, issue
   if (isObject(value)) {
     for (const [key, child] of Object.entries(value)) {
       const fieldPath = pathPrefix ? `${pathPrefix}.${key}` : key;
-      if (/secret|api[-_]?key|token|password|private[-_]?key/i.test(key)) {
+      if (/secret|api[-_]?key|token|password|private[-_]?key|account[-_]?sid/i.test(key)) {
         issues.push({
           field: fieldPath,
           message: `Secrets (${key}) are not permitted in client JSON config; use .env only`,
@@ -384,6 +384,16 @@ export function validateChannelsConfig(data: unknown): ValidationResult<Channels
     errors.push({
       field: "sms.provider",
       message: `sms.provider must be one of: ${validSmsProviders.join(", ")}`,
+    });
+  } else if (
+    isObject(data.sms) &&
+    data.sms.fromNumber !== undefined &&
+    !isTodoPlaceholder(data.sms.fromNumber) &&
+    !isString(data.sms.fromNumber)
+  ) {
+    errors.push({
+      field: "sms.fromNumber",
+      message: "sms.fromNumber must be a non-empty phone number string when specified",
     });
   }
 
