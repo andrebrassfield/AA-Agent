@@ -75,7 +75,13 @@ Check your config and local database anytime with:
 aabook status
 ```
 
-> **Important:** API keys and `WEBHOOK_SECRET` never go inside `client/*.json`. Put secrets in `.env` only (`validator.ts` rejects secret keys inside `channels.json`). Swapping clients is as simple as swapping the `client/` folder.
+> **Important:** API keys and `WEBHOOK_SECRET` never go inside `client/*.json`. Put secrets in `.env` only (`validator.ts` rejects secret keys across client JSON files). Swapping clients is as simple as swapping the `client/` folder.
+
+### Starting from a Pilot Template Pack (`templates/`)
+Instead of typing through the wizard, you can also copy one of the starter folders in [`templates/`](./templates/README.md) into `client/`:
+- `templates/blank/` — Complete blank pack with `TODO:` placeholders on every field that needs an answer from the shop owner.
+- `templates/fort-smith-hvac/` — Worked fictional example matching the Fort Smith Heating & Air demo shop.
+- `templates/home-inspection/` — Fictional pilot-trade pack for a home inspection company with `TODO:` placeholders on `services.json` (inspection tiers and fees must come directly from the owner, never from a website scrape).
 
 ---
 
@@ -109,6 +115,7 @@ Every model completion logs provider, model, task class, token counts, and USD c
 | `./bin/aabook.js install` | First-time machine check, dependency install, config/data scaffold, and CLI link |
 | `aabook setup` | Interactive wizard to create `client/*.json` for a shop |
 | `aabook status` | Validate `client/*.json` and print SQLite booking, call, audit, and spend counts |
+| `aabook usage [--days N] [--client <folder>]` | Read-only model spend & token report by day, task class, provider, and model against the daily cap |
 | `aabook demo` | Run the offline Fort Smith HVAC end-to-end verification pass |
 | `aabook serve` | Start the local webhook server (`WEBHOOK_SECRET` required in `.env`) |
 | `aabook install --service` | Write a macOS `launchd` plist or Linux `systemd` user unit named for this client |

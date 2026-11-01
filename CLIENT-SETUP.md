@@ -77,7 +77,7 @@ Run the interactive setup wizard and enter the client's real business name, trad
 aabook setup
 ```
 
-If the shop offers multiple services, multiple technicians, or Saturday hours, open `client/services.json`, `client/staff.json`, and `client/business.json` in any text editor and add the remaining entries. Do **not** put any API keys or secrets inside `client/*.json`.
+If the shop offers multiple services, multiple technicians, or Saturday hours, open `client/services.json`, `client/staff.json`, and `client/business.json` in any text editor and add the remaining entries. *(For a home inspection pilot or manual file setup, you can instead copy `cp -R templates/home-inspection/. client/` or `cp -R templates/blank/. client/` and replace every `TODO:` value using answers directly from the owner—never from scraping their website.)* Do **not** put any API keys or secrets inside `client/*.json`.
 
 **Verify:**
 ```bash
