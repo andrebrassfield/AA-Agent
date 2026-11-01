@@ -120,10 +120,24 @@ export async function handleBookingWorkflow(
     };
     store.createBooking(newBooking);
 
+    const reminder24h = new Date(startTime.getTime() - 24 * 60 * 60 * 1000).toISOString();
+    const reminder2h = new Date(startTime.getTime() - 2 * 60 * 60 * 1000).toISOString();
+    const scheduledReminders = [
+      {
+        time: reminder24h,
+        text: `Reminder: Your ${service.name} with ${clientConfig.business.name} is tomorrow at ${startTime.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: clientConfig.business.timezone })}.`,
+      },
+      {
+        time: reminder2h,
+        text: `We will see you in about 2 hours for your ${service.name}! Our technician is on the way soon.`,
+      },
+    ];
+
     return {
       success: true,
       booking: newBooking,
-      confirmationSms: `Your ${service.name} is rescheduled for ${startTime.toLocaleString("en-US", { timeZone: clientConfig.business.timezone })}.`
+      confirmationSms: `Your ${service.name} is rescheduled for ${startTime.toLocaleString("en-US", { timeZone: clientConfig.business.timezone })}.`,
+      scheduledReminders,
     };
   }
 
