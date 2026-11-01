@@ -1,6 +1,7 @@
 import { runInstall } from "./cli/install.ts";
 import { runSetup } from "./cli/setup.ts";
 import { runStatus } from "./cli/status.ts";
+import { parseServeArgs, startServe } from "./cli/serve.ts";
 import { runDemo } from "./demo/runner.ts";
 
 function printHelp() {
@@ -14,10 +15,12 @@ Commands:
   install       Check machine prerequisites and scaffold client and data directories
   setup         Interactive configuration wizard to create business/services/staff/persona/policies
   status        Check health and inspect current client configuration & local data store
-  demo          Run the Fort Smith HVAC shop demo with fake calendar and core engine
+  serve         Start the local webhook server for voice and SMS provider events
+  demo          Run the Fort Smith HVAC shop demo with fake calendar, core engine, and channels pass
   help          Show this help message
 
 Options:
+  --port, -p    Port for 'aabook serve' (default: 3000 or PORT env)
   --help, -h    Show help
   --version, -v Show version
 `);
@@ -38,6 +41,11 @@ export async function main(args: string[] = process.argv.slice(2)): Promise<numb
     case "status": {
       const res = runStatus();
       return res.dbConnected ? 0 : 1;
+    }
+    case "serve": {
+      const serveArgs = parseServeArgs(args.slice(1));
+      await startServe(serveArgs);
+      return 0;
     }
     case "demo": {
       const res = await runDemo(true);

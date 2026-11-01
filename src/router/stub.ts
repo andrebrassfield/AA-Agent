@@ -18,7 +18,9 @@ export class StubModelProvider implements ModelProvider {
       reply = this.customHandler(request, modelName);
     } else {
       const lastMsg = request.messages[request.messages.length - 1]?.content.toLowerCase() || "";
-      if (lastMsg.includes("are you an ai") || lastMsg.includes("are you a robot")) {
+      if (request.taskClass === "aux") {
+        reply = "Caller connected with front desk; inquiry and booking follow-up processed.";
+      } else if (lastMsg.includes("are you an ai") || lastMsg.includes("are you a robot")) {
         reply = "I am an automated AI assistant helping the front desk at Arkansas Automated.";
       } else if (lastMsg.includes("book") || lastMsg.includes("tune-up") || lastMsg.includes("schedule")) {
         reply = `I have booked an AC Tune-Up & Inspection for you on tomorrow at 10:00 AM. You will receive an SMS reminder!\n<tool_call>{"name": "manageBooking", "args": {"action": "create", "input": {"customerName": "Test Customer", "customerPhone": "+14795559999", "serviceId": "tuneup", "requestedStartTime": "2024-01-01T10:00:00Z"}}}</tool_call>`;

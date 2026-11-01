@@ -5,6 +5,7 @@
  * - staff.json
  * - persona.json
  * - policies.json
+ * - channels.json (optional; defaults to retell voice + stub sms)
  */
 
 export interface BusinessConfig {
@@ -71,6 +72,9 @@ export interface StaffConfig {
   staff: StaffMember[];
 }
 
+export type VoiceProviderChoice = "retell" | "elevenlabs";
+export type SmsProviderChoice = "stub" | "twilio";
+
 export interface PersonaConfig {
   greeting: string;
   voiceChoice: string; // e.g. "echo", "alloy", "eleven_rachel"
@@ -97,12 +101,22 @@ export interface PoliciesConfig {
   };
 }
 
+export interface ChannelsConfig {
+  voice: {
+    provider: VoiceProviderChoice;
+  };
+  sms: {
+    provider: SmsProviderChoice;
+  };
+}
+
 export interface ClientConfig {
   business: BusinessConfig;
   services: ServicesConfig;
   staff: StaffConfig;
   persona: PersonaConfig;
   policies: PoliciesConfig;
+  channels?: ChannelsConfig;
 }
 
 export interface ValidationIssue {

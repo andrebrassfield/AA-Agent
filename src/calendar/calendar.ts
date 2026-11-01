@@ -1,3 +1,5 @@
+import { generateId } from "../db/store.ts";
+
 export interface CalendarEvent {
   id: string;
   title: string;
@@ -10,7 +12,7 @@ export interface CalendarEvent {
 export interface CalendarAdapter {
   name: string;
   checkAvailability(startTime: string, endTime: string): Promise<boolean>;
-  createEvent(event: CalendarEvent): Promise<CalendarEvent>;
+  createEvent(event: Omit<CalendarEvent, "id"> & { id?: string }): Promise<CalendarEvent>;
   listEvents(start: string, end: string): Promise<CalendarEvent[]>;
   updateEvent(id: string, updates: Partial<CalendarEvent>): Promise<CalendarEvent>;
   deleteEvent(id: string): Promise<void>;
@@ -37,13 +39,17 @@ export class FakeCalendar implements CalendarAdapter {
     return !conflict;
   }
 
-  async createEvent(event: CalendarEvent): Promise<CalendarEvent> {
+  async createEvent(event: Omit<CalendarEvent, "id"> & { id?: string }): Promise<CalendarEvent> {
     const available = await this.checkAvailability(event.startTime, event.endTime);
     if (!available) {
       throw new Error(`Calendar slot from ${event.startTime} to ${event.endTime} is not available.`);
     }
-    this.events.push(event);
-    return event;
+    const created: CalendarEvent = {
+      ...event,
+      id: event.id || generateId("ev"),
+    };
+    this.events.push(created);
+    return created;
   }
 
   async updateEvent(id: string, updates: Partial<CalendarEvent>): Promise<CalendarEvent> {
@@ -177,7 +183,7 @@ export class GoogleCalendarAdapter implements CalendarAdapter {
     return data.items && data.items.length === 0;
   }
 
-  async createEvent(event: CalendarEvent): Promise<CalendarEvent> {
+  async createEvent(event: Omit<CalendarEvent, "id"> & { id?: string }): Promise<CalendarEvent> {
     const token = await this.getAccessToken();
     const payload = {
       summary: event.title,
@@ -197,7 +203,7 @@ export class GoogleCalendarAdapter implements CalendarAdapter {
     );
     if (!res.ok) throw new Error("Failed to create GC event");
     const data = await res.json() as any;
-    return { ...event, id: data.id };
+    return { ...event, id: data.id || event.id || generateId("ev") };
   }
 
   async updateEvent(id: string, updates: Partial<CalendarEvent>): Promise<CalendarEvent> {

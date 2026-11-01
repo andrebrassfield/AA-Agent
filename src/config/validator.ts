@@ -4,6 +4,7 @@ import type {
   StaffConfig,
   PersonaConfig,
   PoliciesConfig,
+  ChannelsConfig,
   ClientConfig,
   ValidationResult,
   ValidationIssue,
@@ -11,6 +12,11 @@ import type {
 
 export const DEFAULT_AI_DISCLOSURE =
   "I am an automated AI assistant helping the front desk at Arkansas Automated.";
+
+export const DEFAULT_CHANNELS_CONFIG: ChannelsConfig = {
+  voice: { provider: "retell" },
+  sms: { provider: "stub" },
+};
 
 function isObject(val: unknown): val is Record<string, unknown> {
   return typeof val === "object" && val !== null && !Array.isArray(val);
@@ -207,6 +213,50 @@ export function validatePoliciesConfig(data: unknown): ValidationResult<Policies
   return {
     valid: errors.length === 0,
     data: errors.length === 0 ? (data as unknown as PoliciesConfig) : undefined,
+    errors,
+  };
+}
+
+export function validateChannelsConfig(data: unknown): ValidationResult<ChannelsConfig> {
+  const errors: ValidationIssue[] = [];
+  if (!isObject(data)) {
+    return { valid: false, errors: [{ field: "root", message: "channels.json must be an object" }] };
+  }
+
+  const validVoiceProviders = ["retell", "elevenlabs"];
+  if (!isObject(data.voice) || !isString(data.voice.provider) || !validVoiceProviders.includes(data.voice.provider)) {
+    errors.push({
+      field: "voice.provider",
+      message: `voice.provider must be one of: ${validVoiceProviders.join(", ")}`,
+    });
+  }
+
+  const validSmsProviders = ["stub", "twilio"];
+  if (!isObject(data.sms) || !isString(data.sms.provider) || !validSmsProviders.includes(data.sms.provider)) {
+    errors.push({
+      field: "sms.provider",
+      message: `sms.provider must be one of: ${validSmsProviders.join(", ")}`,
+    });
+  }
+
+  // Guardrail: secrets belong in .env only, never in client config JSON
+  const checkNoSecrets = (obj: Record<string, unknown>, prefix: string) => {
+    for (const key of Object.keys(obj)) {
+      if (/secret|api[-_]?key|token|password/i.test(key)) {
+        errors.push({
+          field: `${prefix}.${key}`,
+          message: `Secrets (${key}) are not permitted in client JSON config; use .env only`,
+        });
+      }
+    }
+  };
+  checkNoSecrets(data, "channels");
+  if (isObject(data.voice)) checkNoSecrets(data.voice, "channels.voice");
+  if (isObject(data.sms)) checkNoSecrets(data.sms, "channels.sms");
+
+  return {
+    valid: errors.length === 0,
+    data: errors.length === 0 ? (data as unknown as ChannelsConfig) : undefined,
     errors,
   };
 }

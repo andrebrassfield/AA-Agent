@@ -24,6 +24,7 @@ export interface CallLog {
   status: CallStatus;
   durationSeconds: number;
   summary?: string;
+  providerCallId?: string;
   timestamp: string;
 }
 
@@ -60,9 +61,34 @@ export interface EstimateStatus {
 }
 
 export interface ReviewStatus {
-  id: string; // usually bookingId
+  id: string;
+  bookingId?: string;
   bookingLink: string;
   sendAt: string; // ISO string
+  status: "pending" | "sent" | "cancelled";
+  createdAt: string;
+}
+
+export interface ConversationMessage {
+  id: string;
+  customerPhone: string;
+  channel: "sms" | "voice";
+  role: "user" | "assistant";
+  content: string;
+  providerCallId?: string;
+  timestamp: string;
+}
+
+export type FollowUpType = "booking_reminder" | "estimate_touch" | "review_request";
+
+export interface ScheduledFollowUp {
+  id: string;
+  type: FollowUpType;
+  entityType: string;
+  entityId: string;
+  recipientPhone: string;
+  message: string;
+  scheduledFor: string; // ISO string
   status: "pending" | "sent" | "cancelled";
   createdAt: string;
 }

@@ -20,6 +20,7 @@ describe("Demo Runner & Workflows", () => {
     expect(transcriptText).toContain("[WORKFLOW 2c/4] Service Booking Rejection (After-Hours)");
     expect(transcriptText).toContain("[WORKFLOW 3/4] Estimate Follow-up Touches");
     expect(transcriptText).toContain("[WORKFLOW 4/4] Review Request After Completed Job");
+    expect(transcriptText).toContain("[CHANNELS PASS] Webhook Server: Missed Call -> Text-Back -> Booked Job");
 
     // Verify audit log has recorded the actions
     expect(result.auditLog.length).toBeGreaterThanOrEqual(4);

@@ -98,4 +98,8 @@ export const FORT_SMITH_HVAC_CONFIG: ClientConfig = {
       maxDistanceMiles: 35,
     },
   },
+  channels: {
+    voice: { provider: "retell" },
+    sms: { provider: "stub" },
+  },
 };
