@@ -58,9 +58,7 @@ describe("Engine Adapters & Provider Router", () => {
     router.registerProvider(stubProvider);
   });
 
-
   it("falls back to the next provider in the chain if the first one throws (e.g. 404)", async () => {
-    // Setup a new router with a chain
     const chainRouter = new ProviderRouter(
       {
         dailySpendCapUsd: 1.0,
@@ -94,48 +92,6 @@ describe("Engine Adapters & Provider Router", () => {
       messages: [{ role: "user", content: "Hello!" }],
     });
 
-    // Should succeed because it fell back
-    expect(res.provider).toBe("stub-success");
-    expect(res.content).toBe("Success from fallback provider!");
-  });
-
-
-  it("falls back to the next provider in the chain if the first one throws (e.g. 404)", async () => {
-    // Setup a new router with a chain
-    const chainRouter = new ProviderRouter(
-      {
-        dailySpendCapUsd: 1.0,
-        routes: {
-          conversation: {
-            chain: [
-              { provider: "stub-fail", model: "fail-chat" },
-              { provider: "stub-success", model: "success-chat" }
-            ]
-          },
-          reasoning: { chain: [{ provider: "stub", model: "stub-reason" }] },
-          aux: { chain: [{ provider: "stub", model: "stub-aux" }] },
-        },
-      },
-      store
-    );
-
-    const failProvider = new StubModelProvider("stub-fail", () => {
-      throw new Error("HTTP 404 Not Found");
-    });
-
-    const successProvider = new StubModelProvider("stub-success", () => {
-      return "Success from fallback provider!";
-    });
-
-    chainRouter.registerProvider(failProvider);
-    chainRouter.registerProvider(successProvider);
-
-    const res = await chainRouter.complete({
-      taskClass: "conversation",
-      messages: [{ role: "user", content: "Hello!" }],
-    });
-
-    // Should succeed because it fell back
     expect(res.provider).toBe("stub-success");
     expect(res.content).toBe("Success from fallback provider!");
   });
@@ -156,7 +112,6 @@ describe("Engine Adapters & Provider Router", () => {
   });
 
   it("enforces daily spend caps by degrading aux first, never conversation", async () => {
-    // Artificially log usage exceeding spend cap
     const today = new Date().toISOString().substring(0, 10);
     store.logModelUsage({
       id: "u-exceed",
@@ -169,14 +124,12 @@ describe("Engine Adapters & Provider Router", () => {
       timestamp: `${today}T12:00:00Z`,
     });
 
-    // Aux request should be degraded
     const auxRes = await router.complete({
       taskClass: "aux",
       messages: [{ role: "user", content: "Summarize call" }],
     });
     expect(auxRes.content).toContain("[Degraded Aux Mode: Daily Spend Cap Reached]");
 
-    // Conversation request must NOT be degraded
     const convRes = await router.complete({
       taskClass: "conversation",
       messages: [{ role: "user", content: "Can I book a tuneup?" }],
@@ -219,7 +172,6 @@ describe("Engine Adapters & Provider Router", () => {
   });
 
   it("OmpEngine handles stdio requests and honors AI disclosure", async () => {
-    // Note: AI disclosure is handled within OmpEngine before spawning
     const omp = new OmpEngine("node", ["tests/fixtures/fake-omp.js"]);
     const disclosureTurn = await omp.processTurn({
       userMessage: "Are you a robot?",
@@ -232,7 +184,6 @@ describe("Engine Adapters & Provider Router", () => {
     });
     expect(disclosureTurn.reply).toContain("I am an automated AI assistant");
 
-    // This bypasses the guardrail and goes to the fake-omp child process
     const regularTurn = await omp.processTurn({
       userMessage: "Hello harness",
       context: {
