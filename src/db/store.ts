@@ -11,6 +11,7 @@ import type {
   ReviewStatus,
   ConversationMessage,
   ScheduledFollowUp,
+  SmsOptOutRecord,
 } from "../types/db.ts";
 
 /**
@@ -157,6 +158,14 @@ export class DataStore {
       );
 
       CREATE INDEX IF NOT EXISTS idx_followups_due ON scheduled_followups(status, scheduledFor);
+
+      CREATE TABLE IF NOT EXISTS sms_opt_outs (
+        normalizedPhone TEXT PRIMARY KEY,
+        customerPhone TEXT NOT NULL,
+        optedOut INTEGER NOT NULL,
+        keyword TEXT,
+        updatedAt TEXT NOT NULL
+      );
     `);
 
     // Ensure backwards-compatible columns if opening an older SQLite database file
@@ -555,6 +564,69 @@ export class DataStore {
     `);
     const res = stmt.run(entityType, entityId);
     return res.changes;
+  }
+
+  // --- SMS Opt-Out Compliance State (10DLC STOP / START) ---
+  setSmsOptOut(
+    customerPhone: string,
+    optedOut: boolean,
+    options: { keyword?: string; updatedAt?: string } = {}
+  ): SmsOptOutRecord {
+    const normalizedPhone = normalizePhone(customerPhone);
+    const updatedAt = options.updatedAt || new Date().toISOString();
+    const keyword = options.keyword ?? null;
+
+    const stmt = this.db.prepare(`
+      INSERT INTO sms_opt_outs (normalizedPhone, customerPhone, optedOut, keyword, updatedAt)
+      VALUES ($normalizedPhone, $customerPhone, $optedOut, $keyword, $updatedAt)
+      ON CONFLICT(normalizedPhone) DO UPDATE SET
+        customerPhone = excluded.customerPhone,
+        optedOut = excluded.optedOut,
+        keyword = excluded.keyword,
+        updatedAt = excluded.updatedAt
+    `);
+
+    stmt.run({
+      $normalizedPhone: normalizedPhone,
+      $customerPhone: customerPhone,
+      $optedOut: optedOut ? 1 : 0,
+      $keyword: keyword,
+      $updatedAt: updatedAt,
+    });
+
+    return {
+      normalizedPhone,
+      customerPhone,
+      optedOut,
+      keyword,
+      updatedAt,
+    };
+  }
+
+  getSmsOptOut(customerPhone: string): SmsOptOutRecord | null {
+    const normalizedPhone = normalizePhone(customerPhone);
+    const stmt = this.db.prepare("SELECT * FROM sms_opt_outs WHERE normalizedPhone = ?");
+    const row = stmt.get(normalizedPhone) as {
+      normalizedPhone: string;
+      customerPhone: string;
+      optedOut: number;
+      keyword: string | null;
+      updatedAt: string;
+    } | null;
+
+    if (!row) return null;
+    return {
+      normalizedPhone: row.normalizedPhone,
+      customerPhone: row.customerPhone,
+      optedOut: row.optedOut === 1,
+      keyword: row.keyword,
+      updatedAt: row.updatedAt,
+    };
+  }
+
+  isSmsOptedOut(customerPhone: string): boolean {
+    const record = this.getSmsOptOut(customerPhone);
+    return Boolean(record?.optedOut);
   }
 
   close(): void {

@@ -96,3 +96,11 @@ export interface ScheduledFollowUp {
   lastError?: string | null;
   createdAt: string;
 }
+
+export interface SmsOptOutRecord {
+  normalizedPhone: string;
+  customerPhone: string;
+  optedOut: boolean;
+  keyword?: string | null;
+  updatedAt: string;
+}

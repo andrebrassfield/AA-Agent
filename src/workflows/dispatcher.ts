@@ -1,4 +1,5 @@
-import type { DataStore } from "../db/store.ts";
+import { resolveSmsFromNumber } from "../channels/sms/twilio.ts";
+import { normalizePhone, type DataStore } from "../db/store.ts";
 import { collectEnvSecrets, redactString } from "../server/redact.ts";
 import type { SmsProvider } from "../types/channels.ts";
 import type { ClientConfig, QuietHoursPolicy } from "../types/config.ts";
@@ -288,11 +289,31 @@ export class FollowUpDispatcher {
       return { claimed: 0, sent: 0, deferred: 0, skipped: 0, failed: 0 };
     }
 
-    const fromNumber =
-      this.clientConfig.business.phoneNumbers.sms ||
-      this.clientConfig.business.phoneNumbers.main;
+    const fromNumber = resolveSmsFromNumber(this.clientConfig);
 
     for (const item of claimedRows) {
+      // 0. Honor 10DLC SMS opt-out state in DataStore before sending anything to this number
+      if (this.store.isSmsOptedOut(item.recipientPhone)) {
+        this.store.markFollowUpCancelled(item.id);
+        this.store.logAudit({
+          id: this.store.generateId("aud-fup-optout"),
+          action: "FOLLOWUP_SKIPPED",
+          entityType: item.entityType,
+          entityId: item.entityId,
+          details: {
+            followUpId: item.id,
+            type: item.type,
+            recipientPhone: item.recipientPhone,
+            normalizedPhone: normalizePhone(item.recipientPhone),
+            reason: "recipient_opted_out",
+            optedOut: true,
+          },
+          timestamp: nowIso,
+        });
+        skipped++;
+        continue;
+      }
+
       // 1. Honor entity state (replied/stopped estimates, cancelled/rescheduled bookings, sent/cancelled reviews)
       const skipReason = this.getSkipReason(item);
       if (skipReason !== null) {

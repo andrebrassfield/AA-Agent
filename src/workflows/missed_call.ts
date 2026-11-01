@@ -1,5 +1,6 @@
+import { resolveSmsFromNumber } from "../channels/sms/twilio.ts";
 import type { ClientConfig } from "../types/config.ts";
-import type { DataStore } from "../db/store.ts";
+import { normalizePhone, type DataStore } from "../db/store.ts";
 
 export interface MissedCallInput {
   callerPhone: string;
@@ -10,6 +11,7 @@ export interface MissedCallInput {
 export interface MissedCallResult {
   smsSent: boolean;
   duplicate?: boolean;
+  optedOut?: boolean;
   messageText: string;
   smsMessageId?: string;
   auditId: string;
@@ -58,6 +60,8 @@ export async function handleMissedCallTextBack(
     }
   }
 
+  const optedOut = store.isSmsOptedOut(input.callerPhone);
+
   // Log missed call in call_logs
   const callId = store.logCall({
     id: store.generateId("call"),
@@ -66,15 +70,40 @@ export async function handleMissedCallTextBack(
     status: "missed",
     durationSeconds: 0,
     providerCallId: input.providerCallId,
-    summary: "Inbound call missed - triggered missed-call text-back workflow",
+    summary: optedOut
+      ? "Inbound call missed - text-back suppressed because caller opted out of SMS"
+      : "Inbound call missed - triggered missed-call text-back workflow",
     timestamp,
   });
+
+  if (optedOut) {
+    const optOutAuditId = store.logAudit({
+      id: store.generateId("aud-mctb-optout"),
+      action: "MISSED_CALL_TEXT_BACK_SUPPRESSED",
+      entityType: "call",
+      entityId: input.providerCallId || callId,
+      details: {
+        recipientPhone: input.callerPhone,
+        normalizedPhone: normalizePhone(input.callerPhone),
+        providerCallId: input.providerCallId || null,
+        reason: "recipient_opted_out",
+      },
+      timestamp: new Date().toISOString(),
+    });
+    return {
+      smsSent: false,
+      duplicate: false,
+      optedOut: true,
+      messageText: "",
+      auditId: optOutAuditId,
+    };
+  }
 
   const smsText = `Hi there! ${clientConfig.persona.greeting} We missed your call, but we're here to help. Would you like to schedule an appointment or ask a question by text?`;
 
   let smsMessageId: string | undefined;
   if (smsSender) {
-    const fromNumber = clientConfig.business.phoneNumbers.sms || clientConfig.business.phoneNumbers.main;
+    const fromNumber = resolveSmsFromNumber(clientConfig);
     const sent = await smsSender.sendSms({
       to: input.callerPhone,
       from: fromNumber,

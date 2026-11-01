@@ -1,5 +1,5 @@
 import type { CalendarAdapter } from "../calendar/calendar.ts";
-import type { DataStore } from "../db/store.ts";
+import { normalizePhone, type DataStore } from "../db/store.ts";
 import type { ProviderRouter } from "../router/router.ts";
 import type {
   InboundSmsEvent,
@@ -17,6 +17,12 @@ import {
 } from "../workflows/booking.ts";
 import { stopOpenEstimatesForCustomerReply } from "../workflows/estimate.ts";
 import { handleMissedCallTextBack } from "../workflows/missed_call.ts";
+import {
+  buildSmsHelpReply,
+  buildSmsOptInReply,
+  classifySmsComplianceCommand,
+} from "./sms/compliance.ts";
+import { resolveSmsFromNumber } from "./sms/twilio.ts";
 
 export interface RouterProviderSummary {
   summary: string;
@@ -77,7 +83,39 @@ export class ChannelCoordinator {
   }
 
   private getBusinessSmsNumber(): string {
-    return this.clientConfig.business.phoneNumbers.sms || this.clientConfig.business.phoneNumbers.main;
+    return resolveSmsFromNumber(this.clientConfig);
+  }
+
+  private async sendOperationalSmsIfOptedIn(
+    recipientPhone: string,
+    body: string,
+    metadata: Record<string, unknown>,
+    entityId: string
+  ): Promise<{ sent: boolean; messageId: string }> {
+    if (this.store.isSmsOptedOut(recipientPhone)) {
+      this.store.logAudit({
+        id: this.store.generateId("aud-sms-suppressed"),
+        action: "SMS_OUTBOUND_SUPPRESSED",
+        entityType: "sms",
+        entityId,
+        details: {
+          customerPhone: recipientPhone,
+          normalizedPhone: normalizePhone(recipientPhone),
+          reason: "recipient_opted_out",
+          metadata,
+        },
+        timestamp: new Date().toISOString(),
+      });
+      return { sent: false, messageId: "" };
+    }
+
+    const res = await this.smsProvider.sendSms({
+      to: recipientPhone,
+      from: this.getBusinessSmsNumber(),
+      body,
+      metadata,
+    });
+    return { sent: true, messageId: res.messageId };
   }
 
   private scheduleBookingReminders(bookingId: string, recipientPhone: string, reminders: { time: string; text: string }[] = []): number {
@@ -148,10 +186,15 @@ export class ChannelCoordinator {
       );
 
       return {
-        status: mctb.duplicate ? "duplicate_ignored" : "missed_call_text_back_sent",
+        status: mctb.duplicate
+          ? "duplicate_ignored"
+          : mctb.optedOut
+          ? "suppressed_opt_out"
+          : "missed_call_text_back_sent",
         callId: event.providerCallId,
         smsSent: mctb.smsSent,
         duplicate: Boolean(mctb.duplicate),
+        optedOut: Boolean(mctb.optedOut),
       };
     }
 
@@ -378,12 +421,12 @@ export class ChannelCoordinator {
       session.toolActionsSummary.push(`Booked ${res.booking.serviceName} (${res.booking.id}) for ${res.booking.startTime}.`);
 
       if (res.confirmationSms) {
-        await this.smsProvider.sendSms({
-          to: customerPhone,
-          from: this.getBusinessSmsNumber(),
-          body: res.confirmationSms,
-          metadata: { bookingId: res.booking.id, providerCallId: toolCall.providerCallId },
-        });
+        await this.sendOperationalSmsIfOptedIn(
+          customerPhone,
+          res.confirmationSms,
+          { bookingId: res.booking.id, providerCallId: toolCall.providerCallId },
+          res.booking.id
+        );
       }
 
       this.store.appendConversationMessage({
@@ -429,12 +472,12 @@ export class ChannelCoordinator {
       session.toolActionsSummary.push(`Rescheduled ${toolCall.bookingId} -> ${res.booking.id} at ${res.booking.startTime}.`);
 
       if (res.confirmationSms) {
-        await this.smsProvider.sendSms({
-          to: res.booking.customerPhone,
-          from: this.getBusinessSmsNumber(),
-          body: res.confirmationSms,
-          metadata: { bookingId: res.booking.id, providerCallId: toolCall.providerCallId },
-        });
+        await this.sendOperationalSmsIfOptedIn(
+          res.booking.customerPhone,
+          res.confirmationSms,
+          { bookingId: res.booking.id, providerCallId: toolCall.providerCallId },
+          res.booking.id
+        );
       }
 
       this.store.appendConversationMessage({
@@ -478,12 +521,12 @@ export class ChannelCoordinator {
       session.toolActionsSummary.push(`Cancelled booking ${toolCall.bookingId}.`);
 
       if (res.confirmationSms) {
-        await this.smsProvider.sendSms({
-          to: res.booking.customerPhone,
-          from: this.getBusinessSmsNumber(),
-          body: res.confirmationSms,
-          metadata: { bookingId: res.booking.id, providerCallId: toolCall.providerCallId },
-        });
+        await this.sendOperationalSmsIfOptedIn(
+          res.booking.customerPhone,
+          res.confirmationSms,
+          { bookingId: res.booking.id, providerCallId: toolCall.providerCallId },
+          res.booking.id
+        );
       }
 
       this.store.appendConversationMessage({
@@ -551,11 +594,201 @@ export class ChannelCoordinator {
     outboundMessageId: string;
     bookingCreatedId?: string;
     stoppedEstimateIds: string[];
+    optOutStatus?: "opted_out" | "opted_in";
+    outboundSuppressed?: boolean;
   }> {
-    // 1. Customer reply on an open estimate stops pending follow-ups through DataStore
+    const currentlyOptedOut = this.store.isSmsOptedOut(event.from);
+    const complianceCmd = classifySmsComplianceCommand(event.body, currentlyOptedOut);
+
+    // 1a. Inbound STOP (and standard variants): mark opted out in DataStore, audit-log, and send nothing further
+    if (complianceCmd.type === "opt_out") {
+      const stoppedEstimates = stopOpenEstimatesForCustomerReply(event.from, "sms", this.store);
+      this.store.setSmsOptOut(event.from, true, {
+        keyword: complianceCmd.keyword,
+        updatedAt: event.timestamp,
+      });
+
+      this.store.appendConversationMessage({
+        customerPhone: event.from,
+        channel: "sms",
+        role: "user",
+        content: event.body,
+        timestamp: event.timestamp,
+      });
+
+      this.store.logAudit({
+        id: this.store.generateId("aud-optout"),
+        action: "SMS_OPT_OUT",
+        entityType: "sms_consent",
+        entityId: normalizePhone(event.from),
+        details: {
+          customerPhone: event.from,
+          normalizedPhone: normalizePhone(event.from),
+          keyword: complianceCmd.keyword,
+          providerMessageId: event.providerMessageId,
+          stoppedEstimateIds: stoppedEstimates.map((e) => e.id),
+          outboundSuppressed: true,
+        },
+        timestamp: new Date().toISOString(),
+      });
+
+      return {
+        replyText: "",
+        outboundMessageId: "",
+        stoppedEstimateIds: stoppedEstimates.map((e) => e.id),
+        optOutStatus: "opted_out",
+        outboundSuppressed: true,
+      };
+    }
+
+    // 1b. Inbound START (and standard variants): reverse opt-out in DataStore, audit-log, and send confirmation
+    if (complianceCmd.type === "opt_in") {
+      this.store.setSmsOptOut(event.from, false, {
+        keyword: complianceCmd.keyword,
+        updatedAt: event.timestamp,
+      });
+
+      this.store.appendConversationMessage({
+        customerPhone: event.from,
+        channel: "sms",
+        role: "user",
+        content: event.body,
+        timestamp: event.timestamp,
+      });
+
+      const replyText = buildSmsOptInReply(this.clientConfig);
+      const sent = await this.smsProvider.sendSms({
+        to: event.from,
+        from: this.getBusinessSmsNumber(),
+        body: replyText,
+        metadata: {
+          inboundMessageId: event.providerMessageId,
+          compliance: "opt_in",
+          keyword: complianceCmd.keyword,
+        },
+      });
+
+      this.store.appendConversationMessage({
+        customerPhone: event.from,
+        channel: "sms",
+        role: "assistant",
+        content: replyText,
+      });
+
+      this.store.logAudit({
+        id: this.store.generateId("aud-optin"),
+        action: "SMS_OPT_IN",
+        entityType: "sms_consent",
+        entityId: normalizePhone(event.from),
+        details: {
+          customerPhone: event.from,
+          normalizedPhone: normalizePhone(event.from),
+          keyword: complianceCmd.keyword,
+          providerMessageId: event.providerMessageId,
+          outboundMessageId: sent.messageId,
+        },
+        timestamp: new Date().toISOString(),
+      });
+
+      return {
+        replyText,
+        outboundMessageId: sent.messageId,
+        stoppedEstimateIds: [],
+        optOutStatus: "opted_in",
+        outboundSuppressed: false,
+      };
+    }
+
+    // 1c. Check opt-out flag before sending anything in the SMS conversation
+    if (this.store.isSmsOptedOut(event.from)) {
+      this.store.appendConversationMessage({
+        customerPhone: event.from,
+        channel: "sms",
+        role: "user",
+        content: event.body,
+        timestamp: event.timestamp,
+      });
+
+      this.store.logAudit({
+        id: this.store.generateId("aud-sms-suppressed"),
+        action: "SMS_OUTBOUND_SUPPRESSED",
+        entityType: "sms",
+        entityId: event.providerMessageId,
+        details: {
+          customerPhone: event.from,
+          normalizedPhone: normalizePhone(event.from),
+          reason: "recipient_opted_out",
+        },
+        timestamp: new Date().toISOString(),
+      });
+
+      return {
+        replyText: "",
+        outboundMessageId: "",
+        stoppedEstimateIds: [],
+        optOutStatus: "opted_out",
+        outboundSuppressed: true,
+      };
+    }
+
+    // 1d. Inbound HELP (and INFO): return standard informational reply
+    if (complianceCmd.type === "help") {
+      const stoppedEstimates = stopOpenEstimatesForCustomerReply(event.from, "sms", this.store);
+
+      this.store.appendConversationMessage({
+        customerPhone: event.from,
+        channel: "sms",
+        role: "user",
+        content: event.body,
+        timestamp: event.timestamp,
+      });
+
+      const replyText = buildSmsHelpReply(this.clientConfig);
+      const sent = await this.smsProvider.sendSms({
+        to: event.from,
+        from: this.getBusinessSmsNumber(),
+        body: replyText,
+        metadata: {
+          inboundMessageId: event.providerMessageId,
+          compliance: "help",
+          keyword: complianceCmd.keyword,
+        },
+      });
+
+      this.store.appendConversationMessage({
+        customerPhone: event.from,
+        channel: "sms",
+        role: "assistant",
+        content: replyText,
+      });
+
+      this.store.logAudit({
+        id: this.store.generateId("aud-help"),
+        action: "SMS_HELP_REPLIED",
+        entityType: "sms",
+        entityId: event.providerMessageId,
+        details: {
+          customerPhone: event.from,
+          normalizedPhone: normalizePhone(event.from),
+          keyword: complianceCmd.keyword,
+          outboundMessageId: sent.messageId,
+          stoppedEstimateIds: stoppedEstimates.map((e) => e.id),
+        },
+        timestamp: new Date().toISOString(),
+      });
+
+      return {
+        replyText,
+        outboundMessageId: sent.messageId,
+        stoppedEstimateIds: stoppedEstimates.map((e) => e.id),
+        outboundSuppressed: false,
+      };
+    }
+
+    // 2. Customer reply on an open estimate stops pending follow-ups through DataStore
     const stoppedEstimates = stopOpenEstimatesForCustomerReply(event.from, "sms", this.store);
 
-    // 2. Load shared conversation history across both voice and SMS
+    // 3. Load shared conversation history across both voice and SMS
     const priorHistory = this.store
       .getConversationHistory(event.from)
       .map((m) => ({ role: m.role, content: m.content }));
@@ -568,7 +801,7 @@ export class ChannelCoordinator {
       timestamp: event.timestamp,
     });
 
-    // 3. Route turn into the configured EngineAdapter
+    // 4. Route turn into the configured EngineAdapter
     const turn = await this.engine.processTurn({
       userMessage: event.body,
       context: {
@@ -628,15 +861,26 @@ export class ChannelCoordinator {
       }
     }
 
-    const sent = await this.smsProvider.sendSms({
-      to: event.from,
-      from: this.getBusinessSmsNumber(),
-      body: replyText,
-      metadata: {
+    const sendOutcome = await this.sendOperationalSmsIfOptedIn(
+      event.from,
+      replyText,
+      {
         inboundMessageId: event.providerMessageId,
         bookingId: bookingCreatedId,
       },
-    });
+      event.providerMessageId
+    );
+
+    if (!sendOutcome.sent) {
+      return {
+        replyText: "",
+        outboundMessageId: "",
+        bookingCreatedId,
+        stoppedEstimateIds: stoppedEstimates.map((e) => e.id),
+        optOutStatus: "opted_out",
+        outboundSuppressed: true,
+      };
+    }
 
     this.store.appendConversationMessage({
       customerPhone: event.from,
@@ -652,7 +896,7 @@ export class ChannelCoordinator {
       entityId: event.providerMessageId,
       details: {
         customerPhone: event.from,
-        outboundMessageId: sent.messageId,
+        outboundMessageId: sendOutcome.messageId,
         bookingCreatedId: bookingCreatedId || null,
         stoppedEstimateIds: stoppedEstimates.map((e) => e.id),
       },
@@ -661,9 +905,10 @@ export class ChannelCoordinator {
 
     return {
       replyText,
-      outboundMessageId: sent.messageId,
+      outboundMessageId: sendOutcome.messageId,
       bookingCreatedId,
       stoppedEstimateIds: stoppedEstimates.map((e) => e.id),
+      outboundSuppressed: false,
     };
   }
 }
