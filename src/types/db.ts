@@ -80,6 +80,7 @@ export interface ConversationMessage {
 }
 
 export type FollowUpType = "booking_reminder" | "estimate_touch" | "review_request";
+export type FollowUpStatus = "pending" | "claimed" | "sent" | "cancelled" | "failed";
 
 export interface ScheduledFollowUp {
   id: string;
@@ -89,6 +90,9 @@ export interface ScheduledFollowUp {
   recipientPhone: string;
   message: string;
   scheduledFor: string; // ISO string
-  status: "pending" | "sent" | "cancelled";
+  status: FollowUpStatus;
+  claimedAt?: string | null;
+  sentAt?: string | null;
+  lastError?: string | null;
   createdAt: string;
 }

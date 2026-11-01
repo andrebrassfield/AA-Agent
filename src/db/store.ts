@@ -150,13 +150,21 @@ export class DataStore {
         message TEXT NOT NULL,
         scheduledFor TEXT NOT NULL,
         status TEXT NOT NULL,
+        claimedAt TEXT,
+        sentAt TEXT,
+        lastError TEXT,
         createdAt TEXT NOT NULL
       );
+
+      CREATE INDEX IF NOT EXISTS idx_followups_due ON scheduled_followups(status, scheduledFor);
     `);
 
     // Ensure backwards-compatible columns if opening an older SQLite database file
     this.ensureColumn("call_logs", "providerCallId", "TEXT");
     this.ensureColumn("reviews", "bookingId", "TEXT");
+    this.ensureColumn("scheduled_followups", "claimedAt", "TEXT");
+    this.ensureColumn("scheduled_followups", "sentAt", "TEXT");
+    this.ensureColumn("scheduled_followups", "lastError", "TEXT");
   }
 
   private ensureColumn(table: string, column: string, definition: string): void {
@@ -434,8 +442,8 @@ export class DataStore {
     const id = followUp.id || this.generateId("fup");
     const createdAt = followUp.createdAt || new Date().toISOString();
     const stmt = this.db.prepare(`
-      INSERT INTO scheduled_followups (id, type, entityType, entityId, recipientPhone, message, scheduledFor, status, createdAt)
-      VALUES ($id, $type, $entityType, $entityId, $recipientPhone, $message, $scheduledFor, $status, $createdAt)
+      INSERT INTO scheduled_followups (id, type, entityType, entityId, recipientPhone, message, scheduledFor, status, claimedAt, sentAt, lastError, createdAt)
+      VALUES ($id, $type, $entityType, $entityId, $recipientPhone, $message, $scheduledFor, $status, $claimedAt, $sentAt, $lastError, $createdAt)
     `);
     stmt.run({
       $id: id,
@@ -446,9 +454,17 @@ export class DataStore {
       $message: followUp.message,
       $scheduledFor: followUp.scheduledFor,
       $status: followUp.status,
+      $claimedAt: followUp.claimedAt ?? null,
+      $sentAt: followUp.sentAt ?? null,
+      $lastError: followUp.lastError ?? null,
       $createdAt: createdAt,
     });
     return id;
+  }
+
+  getFollowUp(id: string): ScheduledFollowUp | null {
+    const stmt = this.db.prepare("SELECT * FROM scheduled_followups WHERE id = ?");
+    return (stmt.get(id) as ScheduledFollowUp) || null;
   }
 
   listFollowUps(entityId?: string): ScheduledFollowUp[] {
@@ -458,6 +474,78 @@ export class DataStore {
     }
     const stmt = this.db.prepare("SELECT * FROM scheduled_followups ORDER BY scheduledFor ASC, rowid ASC");
     return stmt.all() as ScheduledFollowUp[];
+  }
+
+  /**
+   * Atomically claims due `pending` follow-up rows inside an IMMEDIATE SQLite write transaction.
+   * Rows transition `pending -> claimed` before any network call so a mid-tick restart never double-sends.
+   */
+  claimDueFollowUps(nowIso: string = new Date().toISOString(), limit: number = 50): ScheduledFollowUp[] {
+    const selectDue = this.db.prepare(`
+      SELECT * FROM scheduled_followups
+      WHERE status = 'pending' AND scheduledFor <= ?
+      ORDER BY scheduledFor ASC, rowid ASC
+      LIMIT ?
+    `);
+    const updateClaim = this.db.prepare(`
+      UPDATE scheduled_followups
+      SET status = 'claimed', claimedAt = ?
+      WHERE id = ? AND status = 'pending'
+    `);
+
+    const tx = this.db.transaction((ts: string, maxRows: number): ScheduledFollowUp[] => {
+      const candidates = selectDue.all(ts, maxRows) as ScheduledFollowUp[];
+      const claimed: ScheduledFollowUp[] = [];
+      for (const row of candidates) {
+        const res = updateClaim.run(ts, row.id);
+        if (res.changes > 0) {
+          claimed.push({
+            ...row,
+            status: "claimed",
+            claimedAt: ts,
+          });
+        }
+      }
+      return claimed;
+    });
+
+    return tx.immediate(nowIso, limit);
+  }
+
+  markFollowUpSent(id: string, sentAtIso: string = new Date().toISOString()): boolean {
+    const stmt = this.db.prepare(`
+      UPDATE scheduled_followups
+      SET status = 'sent', sentAt = ?, lastError = NULL
+      WHERE id = ? AND status = 'claimed'
+    `);
+    return stmt.run(sentAtIso, id).changes > 0;
+  }
+
+  markFollowUpCancelled(id: string): boolean {
+    const stmt = this.db.prepare(`
+      UPDATE scheduled_followups
+      SET status = 'cancelled'
+      WHERE id = ? AND status IN ('pending', 'claimed')
+    `);
+    return stmt.run(id).changes > 0;
+  }
+
+  deferFollowUp(id: string, nextScheduledForIso: string): boolean {
+    const stmt = this.db.prepare(`
+      UPDATE scheduled_followups
+      SET status = 'pending', scheduledFor = ?, claimedAt = NULL
+      WHERE id = ? AND status = 'claimed'
+    `);
+    return stmt.run(nextScheduledForIso, id).changes > 0;
+  }
+
+  markFollowUpFailed(id: string, errorMessage: string): boolean {
+    const stmt = this.db.prepare(`
+      UPDATE scheduled_followups
+      SET status = 'failed', lastError = ?
+      WHERE id = ? AND status = 'claimed'
+    `);
+    return stmt.run(errorMessage, id).changes > 0;
   }
 
   cancelFollowUpsForEntity(entityType: string, entityId: string): number {

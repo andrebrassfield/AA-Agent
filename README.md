@@ -92,7 +92,7 @@ Product workflows talk only to the `EngineAdapter` interface, so you can change 
 
 - `AABOOK_ENGINE=core` *(default)* — Uses AA Book's built-in TypeScript agent loop (`CoreEngine`). Recommended for client installs and used by `aabook demo`.
 - `AABOOK_ENGINE=pi` — Runs turns through `@earendil-works/pi-coding-agent` (`PiEngine`) connected to AA Book's local MCP booking tool server (`src/mcp/booking-server.ts`) with a 30-second turn timeout.
-- `AABOOK_ENGINE=omp` — Drives an external `omp-agent` binary over JSON-lines stdio (`OmpEngine`) for shops that already run an oh-my-pi compatible harness.
+- `AABOOK_ENGINE=omp` — Drives an external `omp-agent` binary over JSON-lines stdio (`OmpEngine`) with a configurable per-turn timeout (`AABOOK_OMP_TIMEOUT_MS`, default 30s) and `SIGKILL` cleanup on hung subprocesses.
 
 ### How Model Cost Routing & Spend Caps Work (`ProviderRouter`)
 `ProviderRouter` separates model work into three task classes so live callers get quality responses while background tasks stay cheap:
@@ -100,7 +100,10 @@ Product workflows talk only to the `EngineAdapter` interface, so you can change 
 - `reasoning` — Booking, availability, and rescheduling decisions.
 - `aux` — Call summaries, reminders, estimate follow-up copy, and review requests.
 
-Every model completion logs provider, model, task class, token counts, and USD cost to SQLite (`model_usage`). If a shop hits `DAILY_SPEND_CAP_USD` (default `5.00` in `.env`), `ProviderRouter` degrades `aux` tasks to an internal zero-cost fallback first and never cuts off live `conversation` turns. *(See [ROADMAP.md](./ROADMAP.md) for current v1 provider adapter status.)*
+`aabook serve` registers live HTTP providers using Bun's built-in `fetch` (`OpenAiCompatibleProvider` covering OpenAI, OpenRouter, NVIDIA NIM, or any custom `baseUrl` gateway, plus native `AnthropicProvider` and `GeminiProvider`). Chains and custom gateway URLs can be pinned per client in `client/router.json`, while API keys (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, `NVIDIA_NIM_API_KEY`) live strictly in `.env` and are redacted in logs. Every model completion logs provider, model, task class, real API token counts, and USD cost to SQLite (`model_usage`). If a shop hits its daily spend cap (`client/router.json` -> `client/policies.json` -> `DAILY_SPEND_CAP_USD`, default `5.00`), `ProviderRouter` degrades `aux` tasks to an internal zero-cost fallback first and never cuts off live `conversation` turns. `StubModelProvider` is used only in `aabook demo` and tests.
+
+### Background Follow-Up Dispatcher (`aabook serve`)
+While `aabook serve` is running, `FollowUpDispatcher` ticks on a configurable interval (`--tick-ms`, `FOLLOWUP_TICK_INTERVAL_MS`, or `followUpTickIntervalMs` in `client/policies.json`; disabled in `aabook demo`), atomically claiming due rows from `scheduled_followups` (`pending -> claimed -> sent`) so restarts never double-send. Cancelled bookings and replied/stopped estimates send nothing, and due sends falling inside `quietHours` in `client/policies.json` defer until quiet hours end in the client's timezone.
 
 ### Swapping Voice, SMS, and Calendar Providers
 - **Voice & SMS (`client/channels.json`):** Set `"voice": { "provider": "retell" }` (active in v1) or `"elevenlabs"` (validated seam; adapter tracked for v2), and `"sms": { "provider": "stub" }` (v1 in-memory stub; live carrier adapter tracked for v2).

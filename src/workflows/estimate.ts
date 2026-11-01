@@ -1,6 +1,6 @@
 import type { ClientConfig } from "../types/config.ts";
 import type { DataStore } from "../db/store.ts";
-import type { EstimateStatus } from "../types/db.ts";
+import type { EstimateStatus, ScheduledFollowUp } from "../types/db.ts";
 
 export interface EstimateTouchPlan {
   day: number;
@@ -126,4 +126,45 @@ export async function processEstimateFollowUpTouch(
   });
 
   return { touchSent: true, message };
+}
+
+/**
+ * Schedules the day 2, day 5, and day 10 estimate follow-up touches in `scheduled_followups`
+ * so `FollowUpDispatcher` inside `aabook serve` dispatches them automatically unless the customer replies.
+ */
+export function scheduleEstimateFollowUps(
+  estimateId: string,
+  clientConfig: ClientConfig,
+  store: DataStore,
+  serviceName: string = "HVAC system replacement",
+  createdAtDate?: Date
+): ScheduledFollowUp[] {
+  const estimate = store.getEstimate(estimateId);
+  if (!estimate || estimate.status !== "open") {
+    return [];
+  }
+
+  const baseMs = (createdAtDate ?? new Date(estimate.createdAt)).getTime();
+  const touchDays: (2 | 5 | 10)[] = [2, 5, 10];
+  const created: ScheduledFollowUp[] = [];
+
+  for (const day of touchDays) {
+    const scheduledFor = new Date(baseMs + day * 24 * 60 * 60 * 1000).toISOString();
+    const message = getEstimateTouchMessage(day, clientConfig, estimate.customerName, serviceName);
+    const id = store.scheduleFollowUp({
+      type: "estimate_touch",
+      entityType: "estimate",
+      entityId: estimate.id,
+      recipientPhone: estimate.customerPhone,
+      message,
+      scheduledFor,
+      status: "pending",
+    });
+    const row = store.getFollowUp(id);
+    if (row) {
+      created.push(row);
+    }
+  }
+
+  return created;
 }

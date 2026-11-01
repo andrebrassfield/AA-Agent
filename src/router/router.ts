@@ -3,9 +3,9 @@ import type {
   ModelCompletionRequest,
   ModelCompletionResponse,
   RouterConfig,
-  TaskClass,
 } from "../types/router.ts";
 import type { DataStore } from "../db/store.ts";
+import { collectEnvSecrets, redactString } from "../server/redact.ts";
 
 export class ProviderRouter {
   private providers = new Map<string, ModelProvider>();
@@ -19,6 +19,10 @@ export class ProviderRouter {
 
   registerProvider(provider: ModelProvider): void {
     this.providers.set(provider.name, provider);
+  }
+
+  listRegisteredProviders(): string[] {
+    return Array.from(this.providers.keys());
   }
 
   async complete(request: ModelCompletionRequest): Promise<ModelCompletionResponse> {
@@ -41,7 +45,7 @@ export class ProviderRouter {
 
     const route = this.config.routes[request.taskClass];
     let response: ModelCompletionResponse | null = null;
-    let lastError: any = null;
+    let lastError: unknown = null;
 
     for (const entry of route.chain) {
       const provider = this.providers.get(entry.provider);
@@ -53,14 +57,18 @@ export class ProviderRouter {
       try {
         response = await provider.complete(request, entry.model);
         break; // Success, exit chain
-      } catch (err: any) {
+      } catch (err: unknown) {
         lastError = err;
-        // Continue to the next provider in the chain if there's an error (e.g., 404, 410, or generic throw)
+        // Continue to the next provider in the chain on HTTP/network/config error
       }
     }
 
     if (!response) {
-      throw new Error(`All providers in chain for taskClass "${request.taskClass}" failed. Last error: ${lastError?.message || "Unknown"}`);
+      const rawMessage = lastError instanceof Error ? lastError.message : String(lastError || "Unknown");
+      const safeMessage = redactString(rawMessage, collectEnvSecrets());
+      throw new Error(
+        `All providers in chain for taskClass "${request.taskClass}" failed. Last error: ${safeMessage}`
+      );
     }
 
     // SPEC: Every model call logs provider, model, task class, and token counts.

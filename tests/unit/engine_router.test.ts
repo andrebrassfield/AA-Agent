@@ -1,4 +1,7 @@
 import { describe, it, expect, beforeEach } from "bun:test";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { ProviderRouter } from "../../src/router/router.ts";
 import { StubModelProvider } from "../../src/router/stub.ts";
 import { CoreEngine } from "../../src/engine/core.ts";
@@ -263,5 +266,58 @@ describe("Engine Adapters & Provider Router", () => {
     }
 
     expect(errorCaught).toBe(true);
+  });
+
+  it("OmpEngine enforces a configurable turn timeout, kills the hung subprocess, and surfaces a loud error", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "aabook-omp-timeout-"));
+    const pidFile = join(tempDir, "hung-omp.pid");
+
+    try {
+      const omp = new OmpEngine(process.execPath, ["tests/fixtures/fake-omp-hang.js", pidFile], {
+        timeoutMs: 120,
+      });
+
+      const startedAt = Date.now();
+      let caughtError: Error | null = null;
+      try {
+        await omp.processTurn({
+          userMessage: "Book me an appointment",
+          context: {
+            clientConfig: mockClientConfig,
+            channel: "sms",
+            senderPhone: "+14795559999",
+          },
+          conversationHistory: [],
+        });
+      } catch (err) {
+        caughtError = err as Error;
+      }
+
+      const elapsedMs = Date.now() - startedAt;
+      expect(caughtError).not.toBeNull();
+      expect(caughtError!.message).toContain("OmpEngine process turn timed out after 120ms");
+      expect(elapsedMs).toBeLessThan(3_000);
+
+      // Verify the child subprocess was actually killed rather than orphaned
+      if (existsSync(pidFile)) {
+        const childPid = Number(readFileSync(pidFile, "utf-8").trim());
+        expect(Number.isInteger(childPid) && childPid > 0).toBe(true);
+
+        // Give the OS kernel a brief moment to reap the SIGKILLed child
+        let childAlive = true;
+        for (let attempt = 0; attempt < 20; attempt++) {
+          try {
+            process.kill(childPid, 0);
+            await Bun.sleep(15);
+          } catch {
+            childAlive = false;
+            break;
+          }
+        }
+        expect(childAlive).toBe(false);
+      }
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 });

@@ -1,18 +1,34 @@
 const SENSITIVE_KEY_PATTERN =
   /secret|token|authorization|api[-_]?key|password|signature|private[-_]?key/i;
 
+const ENV_SECRET_NAME_PATTERN =
+  /(?:secret|token|api[-_]?key|password|private[-_]?key)$/i;
+
 export function collectEnvSecrets(extraSecrets: (string | undefined)[] = []): string[] {
-  const candidates = [
+  const candidates: (string | undefined)[] = [
     process.env.WEBHOOK_SECRET,
-    process.env.RETELL_API_KEY,
-    process.env.ELEVENLABS_API_KEY,
+    process.env.OPENAI_API_KEY,
+    process.env.ANTHROPIC_API_KEY,
+    process.env.GEMINI_API_KEY,
     process.env.OPENROUTER_API_KEY,
     process.env.NVIDIA_NIM_API_KEY,
-    process.env.GEMINI_API_KEY,
+    process.env.RETELL_API_KEY,
+    process.env.ELEVENLABS_API_KEY,
     process.env.TWILIO_AUTH_TOKEN,
     process.env.SMS_API_KEY,
     ...extraSecrets,
   ];
+
+  for (const [envKey, envVal] of Object.entries(process.env)) {
+    if (
+      ENV_SECRET_NAME_PATTERN.test(envKey) &&
+      typeof envVal === "string" &&
+      envVal.trim().length >= 6
+    ) {
+      candidates.push(envVal);
+    }
+  }
+
   return Array.from(
     new Set(
       candidates

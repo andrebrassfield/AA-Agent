@@ -31,6 +31,31 @@ export interface ProviderRouteConfig {
   chain: ProviderChainEntry[];
 }
 
+export type HttpProviderKind = "openai-compatible" | "anthropic" | "gemini";
+
+export interface ModelPricingRates {
+  inputPerMillionUsd: number;
+  outputPerMillionUsd: number;
+}
+
+export interface ProviderEndpointConfig {
+  kind: HttpProviderKind;
+  baseUrl?: string;
+  envVar?: string;
+  timeoutMs?: number;
+  pricing?: ModelPricingRates;
+}
+
+export interface ClientRouterConfig {
+  dailySpendCapUsd?: number;
+  providers?: Record<string, ProviderEndpointConfig>;
+  routes: {
+    conversation: ProviderRouteConfig;
+    reasoning: ProviderRouteConfig;
+    aux: ProviderRouteConfig;
+  };
+}
+
 export interface RouterConfig {
   dailySpendCapUsd: number;
   routes: {
