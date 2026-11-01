@@ -1,0 +1,7 @@
+{
+  "greeting": "TODO: Phone and missed-call SMS greeting approved by owner",
+  "voiceChoice": "TODO: Voice ID for selected voice provider (e.g. alloy, echo, eleven_rachel)",
+  "aiDisclosureWording": "TODO: Honest AI disclosure line spoken or texted if asked directly (e.g. I am an automated AI assistant helping the front desk at <Business Name>.)",
+  "tone": "TODO: Choose one of: friendly | professional | casual | urgent",
+  "businessContext": "TODO: 1-2 sentences of owner-verified context (service area, licensing, specialties)"
+}

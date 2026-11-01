@@ -1,0 +1,8 @@
+{
+  "voice": {
+    "provider": "retell"
+  },
+  "sms": {
+    "provider": "stub"
+  }
+}

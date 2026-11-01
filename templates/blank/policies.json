@@ -1,0 +1,20 @@
+{
+  "cancellation": {
+    "noticePeriodHours": "TODO: Cancellation notice period in hours as a number (e.g. 24)",
+    "fee": "TODO: Late cancellation fee in USD as a number (e.g. 0 or 25)",
+    "policyText": "TODO: Plain-language cancellation policy approved by owner"
+  },
+  "deposit": {
+    "required": "TODO: boolean true or false",
+    "type": "TODO: Choose fixed or percentage",
+    "amount": "TODO: Deposit amount as a number (e.g. 0)"
+  },
+  "serviceArea": {
+    "primaryZipCodes": [
+      "TODO: Covered 5-digit zip code(s) from owner (e.g. 72901)"
+    ],
+    "maxDistanceMiles": "TODO: Maximum travel radius in miles as a number (or remove if unused)",
+    "travelFee": "TODO: Out-of-area trip fee in USD as a number (or remove if unused)"
+  },
+  "dailySpendCapUsd": "TODO: Daily model spend cap in USD as a positive number (e.g. 5.0)"
+}

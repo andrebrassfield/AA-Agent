@@ -1,0 +1,33 @@
+{
+  "name": "TODO: Business legal or DBA name from owner",
+  "trade": "TODO: Trade or industry (e.g. Home Inspection, HVAC, Plumbing, Electrical)",
+  "timezone": "TODO: IANA timezone (e.g. America/Chicago)",
+  "hours": {
+    "monday": { "open": "TODO: HH:MM (e.g. 08:00)", "close": "TODO: HH:MM (e.g. 17:00)" },
+    "tuesday": { "open": "TODO: HH:MM (e.g. 08:00)", "close": "TODO: HH:MM (e.g. 17:00)" },
+    "wednesday": { "open": "TODO: HH:MM (e.g. 08:00)", "close": "TODO: HH:MM (e.g. 17:00)" },
+    "thursday": { "open": "TODO: HH:MM (e.g. 08:00)", "close": "TODO: HH:MM (e.g. 17:00)" },
+    "friday": { "open": "TODO: HH:MM (e.g. 08:00)", "close": "TODO: HH:MM (e.g. 17:00)" },
+    "saturday": {
+      "open": "TODO: HH:MM (or 00:00 if closed)",
+      "close": "TODO: HH:MM (or 00:00 if closed)",
+      "closed": "TODO: boolean true if closed Saturday, false if open"
+    },
+    "sunday": {
+      "open": "TODO: HH:MM (or 00:00 if closed)",
+      "close": "TODO: HH:MM (or 00:00 if closed)",
+      "closed": "TODO: boolean true if closed Sunday, false if open"
+    }
+  },
+  "phoneNumbers": {
+    "main": "TODO: Main front desk phone number in E.164 format (e.g. +14795550100)",
+    "sms": "TODO: SMS-enabled phone number in E.164 format (or remove if same as main)",
+    "emergency": "TODO: Emergency/escalation phone number in E.164 format (or remove if none)"
+  },
+  "address": {
+    "street": "TODO: Street address from owner",
+    "city": "TODO: City",
+    "state": "TODO: Two-letter state code (e.g. AR)",
+    "zip": "TODO: 5-digit zip code"
+  }
+}

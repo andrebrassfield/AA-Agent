@@ -1,0 +1,18 @@
+{
+  "cancellation": {
+    "noticePeriodHours": 24,
+    "fee": 50,
+    "policyText": "Please let us know at least 24 hours before your scheduled inspection if you need to reschedule or cancel so the inspection slot can be reopened; cancellations within 24 hours incur a $50 fee."
+  },
+  "deposit": {
+    "required": false,
+    "type": "fixed",
+    "amount": 0
+  },
+  "serviceArea": {
+    "primaryZipCodes": ["72901", "72903", "72904", "72908", "72916", "72921", "72956"],
+    "maxDistanceMiles": 45,
+    "travelFee": 35
+  },
+  "dailySpendCapUsd": 5.0
+}

@@ -1,0 +1,16 @@
+{
+  "staff": [
+    {
+      "id": "tech-dre",
+      "name": "Dre Washington",
+      "role": "Senior HVAC Field Specialist",
+      "phone": "+14795550101"
+    },
+    {
+      "id": "tech-tyler",
+      "name": "Tyler Vance",
+      "role": "HVAC Install & Maintenance Tech",
+      "phone": "+14795550102"
+    }
+  ]
+}

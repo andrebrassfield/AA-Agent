@@ -1,0 +1,33 @@
+{
+  "services": [
+    {
+      "id": "ac-tuneup",
+      "name": "AC Tune-Up & Precision Inspection",
+      "description": "21-point seasonal cooling inspection and refrigerant level check",
+      "durationMinutes": 60,
+      "price": 89,
+      "bufferMinutes": 15,
+      "bookingRules": {
+        "leadTimeHours": 4,
+        "requiresDeposit": false,
+        "allowOnlineBooking": true
+      }
+    },
+    {
+      "id": "furnace-diagnostic",
+      "name": "Heating & Furnace Diagnostic",
+      "description": "Diagnostic safety check and component testing",
+      "durationMinutes": 75,
+      "price": 99,
+      "bufferMinutes": 15
+    },
+    {
+      "id": "system-replacement-quote",
+      "name": "New System Replacement Estimate",
+      "description": "Free in-home load calculation and system replacement consultation",
+      "durationMinutes": 90,
+      "price": 0,
+      "bufferMinutes": 30
+    }
+  ]
+}
