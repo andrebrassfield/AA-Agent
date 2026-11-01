@@ -106,7 +106,7 @@ Product workflows talk only to the `EngineAdapter` interface, so you can change 
 While `aabook serve` is running, `FollowUpDispatcher` ticks on a configurable interval (`--tick-ms`, `FOLLOWUP_TICK_INTERVAL_MS`, or `followUpTickIntervalMs` in `client/policies.json`; disabled in `aabook demo`), atomically claiming due rows from `scheduled_followups` (`pending -> claimed -> sent`) so restarts never double-send. Cancelled bookings and replied/stopped estimates send nothing, and due sends falling inside `quietHours` in `client/policies.json` defer until quiet hours end in the client's timezone.
 
 ### Swapping Voice, SMS, and Calendar Providers
-- **Voice & SMS (`client/channels.json`):** Set `"voice": { "provider": "retell" }` (active in v1) or `"elevenlabs"` (validated seam; adapter tracked for v2), and `"sms": { "provider": "stub" }` (v1 in-memory stub; live carrier adapter tracked for v2).
+- **Voice & SMS (`client/channels.json`):** Set `"voice": { "provider": "retell" }` (active) or `"elevenlabs"` (validated seam; adapter tracked in `ROADMAP.md`), and `"sms": { "provider": "stub" }` (default in-memory stub used by `aabook demo` and tests) or `"twilio"` (live Twilio REST carrier adapter with `X-Twilio-Signature` validation on `POST /webhooks/twilio/sms` and `STOP`/`START`/`HELP` compliance; credentials in `.env` only).
 - **Calendar (`.env`):** Leave Google variables blank to use the built-in local calendar, or set `GOOGLE_CALENDAR_ID`, `GOOGLE_CLIENT_EMAIL`, and `GOOGLE_PRIVATE_KEY` in `.env` to create confirmed bookings on Google Calendar.
 
 ---
