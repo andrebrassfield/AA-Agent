@@ -101,3 +101,26 @@ describe("Local Data Store (SQLite)", () => {
     expect(spend).toBeCloseTo(0.006, 4);
   });
 });
+
+describe("DataStore ID Generation", () => {
+  it("generates unique IDs under rapid loop and avoids SQLite constraint errors", () => {
+    const store = new DataStore(":memory:");
+
+    // Simulate rapid tight loop writes to a table (e.g., audit_logs)
+    for (let i = 0; i < 100; i++) {
+        store.logAudit({
+            id: store.generateId("aud-test"),
+            action: "TEST_RAPID_LOOP",
+            entityType: "test",
+            entityId: "test-1",
+            details: { index: i },
+            timestamp: new Date().toISOString()
+        });
+    }
+
+    const logs = store.listAuditLogs();
+    expect(logs.length).toBe(100);
+
+    store.close();
+  });
+});

@@ -14,6 +14,11 @@ export class DataStore {
     this.initSchema();
   }
 
+
+  generateId(prefix: string): string {
+    return `${prefix}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+  }
+
   private initSchema() {
     this.db.exec("PRAGMA journal_mode = WAL;");
     this.db.exec("PRAGMA synchronous = NORMAL;");
@@ -263,6 +268,11 @@ export class DataStore {
   updateReviewStatus(id: string, status: ReviewStatus["status"]): void {
     const stmt = this.db.prepare("UPDATE reviews SET status = ? WHERE id = ?");
     stmt.run(status, id);
+  }
+
+  listEstimates(): EstimateStatus[] {
+    const stmt = this.db.prepare("SELECT * FROM estimates");
+    return stmt.all() as EstimateStatus[];
   }
 
   close(): void {
