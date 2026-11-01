@@ -1,0 +1,21 @@
+{
+  "staff": [
+    {
+      "id": "TODO: staff-id-slug (e.g. tech-1)",
+      "name": "TODO: Staff member full name from owner",
+      "role": "TODO: Staff role title (e.g. Lead Technician, Licensed Inspector)",
+      "phone": "TODO: Staff mobile number in E.164 format (or remove if unused)",
+      "email": "TODO: Staff calendar/notification email (or remove if unused)",
+      "skills": [
+        "TODO: Skill or service slug handled by this staff member"
+      ],
+      "schedule": {
+        "monday": { "start": "TODO: HH:MM (e.g. 08:00)", "end": "TODO: HH:MM (e.g. 17:00)" },
+        "tuesday": { "start": "TODO: HH:MM (e.g. 08:00)", "end": "TODO: HH:MM (e.g. 17:00)" },
+        "wednesday": { "start": "TODO: HH:MM (e.g. 08:00)", "end": "TODO: HH:MM (e.g. 17:00)" },
+        "thursday": { "start": "TODO: HH:MM (e.g. 08:00)", "end": "TODO: HH:MM (e.g. 17:00)" },
+        "friday": { "start": "TODO: HH:MM (e.g. 08:00)", "end": "TODO: HH:MM (e.g. 17:00)" }
+      }
+    }
+  ]
+}

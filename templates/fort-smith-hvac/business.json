@@ -1,0 +1,25 @@
+{
+  "name": "Fort Smith Heating & Air",
+  "trade": "HVAC",
+  "timezone": "America/Chicago",
+  "hours": {
+    "monday": { "open": "08:00", "close": "17:00" },
+    "tuesday": { "open": "08:00", "close": "17:00" },
+    "wednesday": { "open": "08:00", "close": "17:00" },
+    "thursday": { "open": "08:00", "close": "17:00" },
+    "friday": { "open": "08:00", "close": "17:00" },
+    "saturday": { "open": "09:00", "close": "14:00" },
+    "sunday": { "open": "00:00", "close": "00:00", "closed": true }
+  },
+  "phoneNumbers": {
+    "main": "+14795550100",
+    "sms": "+14795550100",
+    "emergency": "+14795550109"
+  },
+  "address": {
+    "street": "701 Rogers Ave",
+    "city": "Fort Smith",
+    "state": "AR",
+    "zip": "72901"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "cancellation": {
+    "noticePeriodHours": 24,
+    "fee": 25,
+    "policyText": "Cancellations within 24 hours of scheduled appointment may be subject to a $25 trip charge."
+  },
+  "deposit": {
+    "required": false,
+    "type": "fixed",
+    "amount": 0
+  },
+  "serviceArea": {
+    "primaryZipCodes": ["72901", "72903", "72904", "72908", "72916", "72956"],
+    "maxDistanceMiles": 35
+  },
+  "dailySpendCapUsd": 5.0
+}

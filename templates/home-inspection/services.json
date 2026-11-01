@@ -1,0 +1,27 @@
+{
+  "services": [
+    {
+      "id": "TODO: owner-confirmed-buyer-inspection-slug (e.g. residential-buyer-under-2500-sqft)",
+      "name": "TODO: Ask owner for exact buyer inspection tier name & sq-ft band (never scrape from website)",
+      "description": "TODO: Ask owner what systems, report turnaround, and walkthrough are included",
+      "durationMinutes": "TODO: Ask owner for on-site inspection duration in minutes as a number (e.g. 180)",
+      "price": "TODO: Ask owner for exact fee in USD as a number (never scrape from website)",
+      "bufferMinutes": "TODO: Ask owner for drive/report buffer between inspections in minutes (e.g. 45)",
+      "bookingRules": {
+        "leadTimeHours": "TODO: Ask owner for minimum notice in hours as a number (e.g. 24)",
+        "requiresDeposit": "TODO: Ask owner whether deposit/signed agreement is required (boolean true or false)",
+        "depositAmount": "TODO: Ask owner for deposit amount in USD as a number (e.g. 0)",
+        "allowOnlineBooking": "TODO: Ask owner whether direct calendar booking is allowed (boolean true or false)",
+        "assignedStaffIds": ["inspector-1"]
+      }
+    },
+    {
+      "id": "TODO: owner-confirmed-second-service-or-addon-slug (remove or duplicate per owner menu)",
+      "name": "TODO: Ask owner for additional inspection tier or standalone service (e.g. pre-listing, 11-month warranty, radon, sewer scope — never scrape)",
+      "description": "TODO: Ask owner for scope and any third-party lab/partner requirements",
+      "durationMinutes": "TODO: Ask owner for duration in minutes as a number",
+      "price": "TODO: Ask owner for price in USD as a number",
+      "bufferMinutes": "TODO: Ask owner for buffer in minutes as a number"
+    }
+  ]
+}

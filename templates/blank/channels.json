@@ -1,0 +1,8 @@
+{
+  "voice": {
+    "provider": "TODO: Choose retell or elevenlabs (keep API keys in .env only)"
+  },
+  "sms": {
+    "provider": "TODO: Choose stub or twilio (keep API keys in .env only)"
+  }
+}

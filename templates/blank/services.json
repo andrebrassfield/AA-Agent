@@ -1,0 +1,21 @@
+{
+  "services": [
+    {
+      "id": "TODO: url-safe-service-slug (e.g. diagnostic-visit)",
+      "name": "TODO: Exact service name from owner (never scraped from website)",
+      "description": "TODO: Plain-language description of what this service includes",
+      "durationMinutes": "TODO: Appointment duration in minutes as a positive number (e.g. 60)",
+      "price": "TODO: Price in USD as a non-negative number from owner (e.g. 95, or 0 for free estimate)",
+      "bufferMinutes": "TODO: Travel/reset buffer in minutes as a number (e.g. 15)",
+      "bookingRules": {
+        "leadTimeHours": "TODO: Minimum lead time in hours as a number (e.g. 4)",
+        "requiresDeposit": "TODO: boolean true or false",
+        "depositAmount": "TODO: Deposit amount in USD as a number (e.g. 0)",
+        "allowOnlineBooking": "TODO: boolean true or false",
+        "assignedStaffIds": [
+          "TODO: Matching staff id from staff.json (or remove assignedStaffIds if any staff can take it)"
+        ]
+      }
+    }
+  ]
+}
