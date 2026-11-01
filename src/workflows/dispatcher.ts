@@ -352,7 +352,7 @@ export class FollowUpDispatcher {
           },
         });
 
-        this.store.markFollowUpSent(item.id, smsResult.timestamp || nowIso);
+        this.store.markFollowUpSent(item.id, nowIso);
 
         if (item.type === "review_request") {
           const rev = this.store.getReview(item.entityId);
