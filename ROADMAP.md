@@ -2,6 +2,8 @@
 
 This file tracks what is implemented in AA Book today and what remains open for live voice and calendar integrations. Nothing stubbed is presented as live.
 
+For the full code-verified dependency graph, runtime packages, built-ins, and external service table, see [System Architecture & Dependency Map](./README.md#system-architecture--dependency-map) in [`README.md`](./README.md).
+
 ---
 
 ## Closed in Current Build
