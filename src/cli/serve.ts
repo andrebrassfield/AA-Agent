@@ -9,6 +9,7 @@ import { ProviderRouter } from "../router/router.ts";
 import { StubModelProvider } from "../router/stub.ts";
 import { startWebhookServer, type RunningWebhookServer } from "../server/server.ts";
 import type { EngineAdapter } from "../types/engine.ts";
+import { resolveClientDailySpendCap } from "./usage.ts";
 
 export interface ServeCliOptions {
   port?: number;
@@ -65,10 +66,10 @@ export async function startServe(options: ServeCliOptions = {}): Promise<ServeHa
 
   const store = new DataStore(dbPath);
 
-  const dailyCap = Number(process.env.DAILY_SPEND_CAP_USD || "5.0");
+  const { dailySpendCapUsd } = resolveClientDailySpendCap(clientDir);
   const router = new ProviderRouter(
     {
-      dailySpendCapUsd: isNaN(dailyCap) ? 5.0 : dailyCap,
+      dailySpendCapUsd,
       routes: {
         conversation: { chain: [{ provider: "stub", model: "stub-conversation" }] },
         reasoning: { chain: [{ provider: "stub", model: "stub-reasoning" }] },

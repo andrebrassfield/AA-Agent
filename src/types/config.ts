@@ -99,6 +99,7 @@ export interface PoliciesConfig {
     maxDistanceMiles?: number;
     travelFee?: number;
   };
+  dailySpendCapUsd?: number;
 }
 
 export interface ChannelsConfig {
