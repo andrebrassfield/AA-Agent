@@ -16,7 +16,7 @@ export interface DemoRunOutput {
   success: boolean;
 }
 
-export async function runDemo(verbose: boolean = true): Promise<DemoRunOutput> {
+export async function runDemo(verbose: boolean = true, usePiEngine: boolean = false): Promise<DemoRunOutput> {
   const transcript: string[] = [];
   const log = (line: string) => {
     transcript.push(line);

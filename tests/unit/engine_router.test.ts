@@ -3,6 +3,7 @@ import { ProviderRouter } from "../../src/router/router.ts";
 import { StubModelProvider } from "../../src/router/stub.ts";
 import { CoreEngine } from "../../src/engine/core.ts";
 import { OmpEngine } from "../../src/engine/omp.ts";
+import { PiEngine } from "../../src/engine/pi.ts";
 import { DataStore } from "../../src/db/store.ts";
 import type { ClientConfig } from "../../src/types/config.ts";
 
@@ -195,6 +196,52 @@ describe("Engine Adapters & Provider Router", () => {
     });
     expect(regularTurn.reply).toContain("Echoing from fake harness: Hello harness");
   });
+
+
+  it("PiEngine processes a turn via JSONL stdout matching agent_settled", async () => {
+    const pi = new PiEngine(router);
+    pi.spawnCommand = "node";
+    pi.spawnArgsPrefix = ["tests/fixtures/fake-pi.js"];
+
+    const turn = await pi.processTurn({
+      userMessage: "Hello Pi",
+      context: {
+        clientConfig: mockClientConfig,
+        channel: "sms",
+        senderPhone: "+14795559999",
+      },
+      conversationHistory: [],
+    });
+
+    expect(turn.reply).toContain("Echoing Pi: Hello Pi");
+
+    const logs = store.listModelUsage();
+    const piLog = logs.find(l => l.provider === "pi-stub");
+    expect(piLog).toBeDefined();
+    expect(piLog?.promptTokens).toBe(10);
+  });
+
+  it("PiEngine parses a tool call out of assistant message", async () => {
+    const pi = new PiEngine(router);
+    pi.spawnCommand = "node";
+    pi.spawnArgsPrefix = ["tests/fixtures/fake-pi.js"];
+
+    const turn = await pi.processTurn({
+      userMessage: "Book an AC Tune-Up",
+      context: {
+        clientConfig: mockClientConfig,
+        channel: "sms",
+        senderPhone: "+14795559999",
+      },
+      conversationHistory: [],
+    });
+
+    expect(turn.actionTaken?.type).toBe("TOOL_CALL");
+    expect((turn.actionTaken?.details as any)?.name).toBe("manageBooking");
+    expect((turn.actionTaken?.details as any)?.args?.input?.serviceId).toBe("ac-tuneup");
+  });
+
+
 
   it("OmpEngine throws an explicit error when binary is missing", async () => {
     const omp = new OmpEngine("missing-omp-binary-12345");
