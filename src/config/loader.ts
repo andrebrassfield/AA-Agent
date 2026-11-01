@@ -6,6 +6,7 @@ import type {
   StaffConfig,
   PersonaConfig,
   PoliciesConfig,
+  ChannelsConfig,
   ClientConfig,
 } from "../types/config.ts";
 import {
@@ -14,6 +15,8 @@ import {
   validateStaffConfig,
   validatePersonaConfig,
   validatePoliciesConfig,
+  validateChannelsConfig,
+  DEFAULT_CHANNELS_CONFIG,
 } from "./validator.ts";
 
 export interface LoadConfigResult {
@@ -59,6 +62,14 @@ export function loadClientConfig(clientDir: string): LoadConfigResult {
   const persona = readJson<PersonaConfig>("persona.json", validatePersonaConfig);
   const policies = readJson<PoliciesConfig>("policies.json", validatePoliciesConfig);
 
+  let channels: ChannelsConfig = DEFAULT_CHANNELS_CONFIG;
+  if (existsSync(join(clientDir, "channels.json"))) {
+    const loadedChannels = readJson<ChannelsConfig>("channels.json", validateChannelsConfig);
+    if (loadedChannels) {
+      channels = loadedChannels;
+    }
+  }
+
   if (errors.length > 0 || !business || !services || !staff || !persona || !policies) {
     return { success: false, errors };
   }
@@ -71,6 +82,7 @@ export function loadClientConfig(clientDir: string): LoadConfigResult {
       staff,
       persona,
       policies,
+      channels,
     },
     errors: [],
   };
@@ -83,4 +95,7 @@ export function writeClientConfig(clientDir: string, config: ClientConfig): void
   writeFileSync(join(clientDir, "staff.json"), JSON.stringify(config.staff, null, 2), "utf-8");
   writeFileSync(join(clientDir, "persona.json"), JSON.stringify(config.persona, null, 2), "utf-8");
   writeFileSync(join(clientDir, "policies.json"), JSON.stringify(config.policies, null, 2), "utf-8");
+  if (config.channels) {
+    writeFileSync(join(clientDir, "channels.json"), JSON.stringify(config.channels, null, 2), "utf-8");
+  }
 }
