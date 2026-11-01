@@ -3,10 +3,11 @@ import type { SmsProvider, VoiceProviderAdapter } from "../types/channels.ts";
 import { DEFAULT_CHANNELS_CONFIG } from "../config/validator.ts";
 import { RetellVoiceAdapter } from "./voice/retell.ts";
 import { StubSmsProvider } from "./sms/stub.ts";
+import { TwilioSmsProvider } from "./sms/twilio.ts";
 
 /**
  * Registry mapping client config provider names (`channels.json`) to adapter implementations.
- * Adding ElevenLabs or Twilio later requires only registering an adapter here, without touching product code.
+ * `stub` remains the default SMS provider (used by demo and tests); `twilio` is selected per client.
  */
 export class ChannelAdapterRegistry {
   private voiceAdapters = new Map<string, VoiceProviderAdapter>();
@@ -15,6 +16,7 @@ export class ChannelAdapterRegistry {
   constructor() {
     this.registerVoiceAdapter(new RetellVoiceAdapter());
     this.registerSmsProvider(new StubSmsProvider());
+    this.registerSmsProvider(new TwilioSmsProvider());
   }
 
   registerVoiceAdapter(adapter: VoiceProviderAdapter): void {
@@ -43,6 +45,12 @@ export class ChannelAdapterRegistry {
       throw new Error(
         `SMS provider "${providerName}" configured in client config is not registered. Available: ${Array.from(this.smsProviders.keys()).join(", ")}`
       );
+    }
+    if (provider instanceof TwilioSmsProvider) {
+      const configuredFrom =
+        clientConfig.channels?.sms.fromNumber?.trim() ||
+        clientConfig.business.phoneNumbers.sms?.trim();
+      return provider.withDefaultFromNumber(configuredFrom);
     }
     return provider;
   }

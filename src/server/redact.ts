@@ -1,8 +1,8 @@
 const SENSITIVE_KEY_PATTERN =
-  /secret|token|authorization|api[-_]?key|password|signature|private[-_]?key/i;
+  /secret|token|authorization|api[-_]?key|password|signature|private[-_]?key|account[-_]?sid/i;
 
 const ENV_SECRET_NAME_PATTERN =
-  /(?:secret|token|api[-_]?key|password|private[-_]?key)$/i;
+  /(?:secret|token|api[-_]?key|password|private[-_]?key|account[-_]?sid)$/i;
 
 export function collectEnvSecrets(extraSecrets: (string | undefined)[] = []): string[] {
   const candidates: (string | undefined)[] = [
@@ -14,6 +14,7 @@ export function collectEnvSecrets(extraSecrets: (string | undefined)[] = []): st
     process.env.NVIDIA_NIM_API_KEY,
     process.env.RETELL_API_KEY,
     process.env.ELEVENLABS_API_KEY,
+    process.env.TWILIO_ACCOUNT_SID,
     process.env.TWILIO_AUTH_TOKEN,
     process.env.SMS_API_KEY,
     ...extraSecrets,

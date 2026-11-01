@@ -188,12 +188,13 @@ export async function runSetup(options: SetupOptions = {}): Promise<ClientConfig
 
     console.log("\n6. Channels");
     const voiceProvInput = await ask("Voice Provider (retell, elevenlabs)", "retell");
+    const smsProvInput = await ask("SMS Provider (stub, twilio)", "stub");
     const channels = {
       voice: {
         provider: (voiceProvInput === "elevenlabs" ? "elevenlabs" : "retell") as "retell" | "elevenlabs",
       },
       sms: {
-        provider: "stub" as const,
+        provider: (smsProvInput === "twilio" ? "twilio" : "stub") as "stub" | "twilio",
       },
     };
     const channelsValidation = validateChannelsConfig(channels);

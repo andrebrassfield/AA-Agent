@@ -119,6 +119,7 @@ export interface ChannelsConfig {
   };
   sms: {
     provider: SmsProviderChoice;
+    fromNumber?: string;
   };
 }
 
