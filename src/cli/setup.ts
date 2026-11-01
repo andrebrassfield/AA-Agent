@@ -217,6 +217,7 @@ export async function runSetup(options: SetupOptions = {}): Promise<ClientConfig
     console.log(`- staff.json`);
     console.log(`- persona.json`);
     console.log(`- policies.json`);
+    console.log(`- channels.json`);
     return config;
   } finally {
     rl.close();
