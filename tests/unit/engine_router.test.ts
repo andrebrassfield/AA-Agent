@@ -3,6 +3,7 @@ import { ProviderRouter } from "../../src/router/router.ts";
 import { StubModelProvider } from "../../src/router/stub.ts";
 import { CoreEngine } from "../../src/engine/core.ts";
 import { OmpEngine } from "../../src/engine/omp.ts";
+import { PiEngine } from "../../src/engine/pi.ts";
 import { DataStore } from "../../src/db/store.ts";
 import type { ClientConfig } from "../../src/types/config.ts";
 
@@ -47,15 +48,53 @@ describe("Engine Adapters & Provider Router", () => {
       {
         dailySpendCapUsd: 0.05,
         routes: {
-          conversation: { defaultProvider: "stub", defaultModel: "stub-chat" },
-          reasoning: { defaultProvider: "stub", defaultModel: "stub-reason" },
-          aux: { defaultProvider: "stub", defaultModel: "stub-aux" },
+          conversation: { chain: [{ provider: "stub", model: "stub-chat" }] },
+          reasoning: { chain: [{ provider: "stub", model: "stub-reason" }] },
+          aux: { chain: [{ provider: "stub", model: "stub-aux" }] },
         },
       },
       store
     );
     stubProvider = new StubModelProvider("stub");
     router.registerProvider(stubProvider);
+  });
+
+  it("falls back to the next provider in the chain if the first one throws (e.g. 404)", async () => {
+    const chainRouter = new ProviderRouter(
+      {
+        dailySpendCapUsd: 1.0,
+        routes: {
+          conversation: {
+            chain: [
+              { provider: "stub-fail", model: "fail-chat" },
+              { provider: "stub-success", model: "success-chat" }
+            ]
+          },
+          reasoning: { chain: [{ provider: "stub", model: "stub-reason" }] },
+          aux: { chain: [{ provider: "stub", model: "stub-aux" }] },
+        },
+      },
+      store
+    );
+
+    const failProvider = new StubModelProvider("stub-fail", () => {
+      throw new Error("HTTP 404 Not Found");
+    });
+
+    const successProvider = new StubModelProvider("stub-success", () => {
+      return "Success from fallback provider!";
+    });
+
+    chainRouter.registerProvider(failProvider);
+    chainRouter.registerProvider(successProvider);
+
+    const res = await chainRouter.complete({
+      taskClass: "conversation",
+      messages: [{ role: "user", content: "Hello!" }],
+    });
+
+    expect(res.provider).toBe("stub-success");
+    expect(res.content).toBe("Success from fallback provider!");
   });
 
   it("routes conversation completions and logs token usage", async () => {
@@ -74,7 +113,6 @@ describe("Engine Adapters & Provider Router", () => {
   });
 
   it("enforces daily spend caps by degrading aux first, never conversation", async () => {
-    // Artificially log usage exceeding spend cap
     const today = new Date().toISOString().substring(0, 10);
     store.logModelUsage({
       id: "u-exceed",
@@ -87,14 +125,12 @@ describe("Engine Adapters & Provider Router", () => {
       timestamp: `${today}T12:00:00Z`,
     });
 
-    // Aux request should be degraded
     const auxRes = await router.complete({
       taskClass: "aux",
       messages: [{ role: "user", content: "Summarize call" }],
     });
     expect(auxRes.content).toContain("[Degraded Aux Mode: Daily Spend Cap Reached]");
 
-    // Conversation request must NOT be degraded
     const convRes = await router.complete({
       taskClass: "conversation",
       messages: [{ role: "user", content: "Can I book a tuneup?" }],
@@ -131,13 +167,13 @@ describe("Engine Adapters & Provider Router", () => {
       conversationHistory: [],
     });
 
-    expect(output.actionTaken?.type).toBe("BOOKING_CREATED");
-    expect(output.actionTaken?.booking?.serviceName).toBe("AC Tune-Up");
-    expect(output.actionTaken?.booking?.customerPhone).toBe("+14795559999");
+    expect(output.actionTaken?.type).toBe("TOOL_CALL");
+    expect((output.actionTaken?.details as any)?.args?.input?.serviceId).toBe("tuneup");
+    expect((output.actionTaken?.details as any)?.args?.input?.customerPhone).toBe("+14795559999");
   });
 
   it("OmpEngine handles stdio requests and honors AI disclosure", async () => {
-    const omp = new OmpEngine("mock-omp");
+    const omp = new OmpEngine("node", ["tests/fixtures/fake-omp.js"]);
     const disclosureTurn = await omp.processTurn({
       userMessage: "Are you a robot?",
       context: {
@@ -150,7 +186,7 @@ describe("Engine Adapters & Provider Router", () => {
     expect(disclosureTurn.reply).toContain("I am an automated AI assistant");
 
     const regularTurn = await omp.processTurn({
-      userMessage: "What services do you offer?",
+      userMessage: "Hello harness",
       context: {
         clientConfig: mockClientConfig,
         channel: "sms",
@@ -158,6 +194,74 @@ describe("Engine Adapters & Provider Router", () => {
       },
       conversationHistory: [],
     });
-    expect(regularTurn.reply).toContain("[OMP stdio via mock-omp]");
+    expect(regularTurn.reply).toContain("Echoing from fake harness: Hello harness");
+  });
+
+
+  it("PiEngine processes a turn via JSONL stdout matching agent_settled", async () => {
+    const pi = new PiEngine(router);
+    pi.spawnCommand = "node";
+    pi.spawnArgsPrefix = ["tests/fixtures/fake-pi.js"];
+
+    const turn = await pi.processTurn({
+      userMessage: "Hello Pi",
+      context: {
+        clientConfig: mockClientConfig,
+        channel: "sms",
+        senderPhone: "+14795559999",
+      },
+      conversationHistory: [],
+    });
+
+    expect(turn.reply).toContain("Echoing Pi: Hello Pi");
+
+    const logs = store.listModelUsage();
+    const piLog = logs.find(l => l.provider === "pi-stub");
+    expect(piLog).toBeDefined();
+    expect(piLog?.promptTokens).toBe(10);
+  });
+
+  it("PiEngine parses a tool call out of assistant message", async () => {
+    const pi = new PiEngine(router);
+    pi.spawnCommand = "node";
+    pi.spawnArgsPrefix = ["tests/fixtures/fake-pi.js"];
+
+    const turn = await pi.processTurn({
+      userMessage: "Book an AC Tune-Up",
+      context: {
+        clientConfig: mockClientConfig,
+        channel: "sms",
+        senderPhone: "+14795559999",
+      },
+      conversationHistory: [],
+    });
+
+    expect(turn.actionTaken?.type).toBe("TOOL_CALL");
+    expect((turn.actionTaken?.details as any)?.name).toBe("manageBooking");
+    expect((turn.actionTaken?.details as any)?.args?.input?.serviceId).toBe("ac-tuneup");
+  });
+
+
+
+  it("OmpEngine throws an explicit error when binary is missing", async () => {
+    const omp = new OmpEngine("missing-omp-binary-12345");
+
+    let errorCaught = false;
+    try {
+      await omp.processTurn({
+        userMessage: "Hello",
+        context: {
+          clientConfig: mockClientConfig,
+          channel: "sms",
+          senderPhone: "+14795559999",
+        },
+        conversationHistory: [],
+      });
+    } catch (e: any) {
+      errorCaught = true;
+      expect(e.message).toContain("missing or could not be found");
+    }
+
+    expect(errorCaught).toBe(true);
   });
 });

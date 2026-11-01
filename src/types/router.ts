@@ -22,11 +22,13 @@ export interface ModelCompletionResponse {
   costUsd: number;
 }
 
+export interface ProviderChainEntry {
+  provider: string;
+  model: string;
+}
+
 export interface ProviderRouteConfig {
-  defaultProvider: string;
-  defaultModel: string;
-  fallbackProvider?: string;
-  fallbackModel?: string;
+  chain: ProviderChainEntry[];
 }
 
 export interface RouterConfig {

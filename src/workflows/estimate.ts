@@ -6,15 +6,8 @@ export interface EstimateTouchPlan {
   message: string;
 }
 
-export interface EstimateFollowUpStatus {
-  estimateId: string;
-  customerName: string;
-  customerPhone: string;
-  amount: number;
-  touchesSent: number[];
-  replied: boolean;
-  status: "open" | "replied" | "closed";
-}
+import type { EstimateStatus } from "../types/db.ts";
+
 
 /**
  * Estimate follow-up workflow: open estimates get touches on day 2, day 5, and day 10
@@ -40,38 +33,52 @@ export function getEstimateTouchMessage(
 }
 
 export async function processEstimateFollowUpTouch(
-  estimate: EstimateFollowUpStatus,
+  estimateId: string,
   targetDay: 2 | 5 | 10,
   clientConfig: ClientConfig,
   store: DataStore,
   customerReplied: boolean = false
 ): Promise<{ touchSent: boolean; reason?: string; message?: string }> {
-  if (estimate.replied || customerReplied) {
-    estimate.replied = true;
-    estimate.status = "replied";
+  let estimate = store.getEstimate(estimateId);
+  if (!estimate) {
+    return { touchSent: false, reason: "Estimate not found." };
+  }
+
+  let touchesSent = JSON.parse(estimate.touchesSent) as number[];
+
+  if (estimate.status !== "open" || customerReplied) {
+    if (customerReplied && estimate.status === "open") {
+      estimate.status = "replied";
+      estimate.stopReason = "Customer replied - stopping automated follow-ups";
+      store.updateEstimate(estimate);
+    }
+
     store.logAudit({
       id: `aud-est-stop-${Date.now()}`,
       action: "ESTIMATE_TOUCH_STOPPED",
       entityType: "estimate",
-      entityId: estimate.estimateId,
-      details: { reason: "Customer replied - stopping automated follow-ups", targetDay },
+      entityId: estimate.id,
+      details: { reason: estimate.stopReason || "Estimate no longer open", targetDay },
       timestamp: new Date().toISOString(),
     });
-    return { touchSent: false, reason: "Customer replied; sequence stopped." };
+    return { touchSent: false, reason: "Estimate closed or replied; sequence stopped." };
   }
 
-  if (estimate.touchesSent.includes(targetDay)) {
+  if (touchesSent.includes(targetDay)) {
     return { touchSent: false, reason: `Touch for day ${targetDay} already sent.` };
   }
 
   const message = getEstimateTouchMessage(targetDay, clientConfig, estimate.customerName, "HVAC system replacement");
-  estimate.touchesSent.push(targetDay);
+
+  touchesSent.push(targetDay);
+  estimate.touchesSent = JSON.stringify(touchesSent);
+  store.updateEstimate(estimate);
 
   store.logAudit({
     id: `aud-est-touch-${Date.now()}-${targetDay}`,
     action: `ESTIMATE_TOUCH_DAY_${targetDay}`,
     entityType: "estimate",
-    entityId: estimate.estimateId,
+    entityId: estimate.id,
     details: {
       recipientPhone: estimate.customerPhone,
       message,

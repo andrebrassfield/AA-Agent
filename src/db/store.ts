@@ -1,7 +1,7 @@
 import { Database } from "bun:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import type { Booking, CallLog, AuditLogEntry, ModelUsageLog } from "../types/db.ts";
+import type { Booking, CallLog, AuditLogEntry, ModelUsageLog, EstimateStatus, ReviewStatus } from "../types/db.ts";
 
 export class DataStore {
   private db: Database;
@@ -61,6 +61,26 @@ export class DataStore {
         completionTokens INTEGER NOT NULL,
         costUsd REAL NOT NULL,
         timestamp TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS estimates (
+        id TEXT PRIMARY KEY,
+        customerName TEXT NOT NULL,
+        customerPhone TEXT NOT NULL,
+        amount REAL NOT NULL,
+        status TEXT NOT NULL,
+        touchesSent TEXT NOT NULL,
+        nextTouchAt TEXT,
+        stopReason TEXT,
+        createdAt TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS reviews (
+        id TEXT PRIMARY KEY,
+        bookingLink TEXT NOT NULL,
+        sendAt TEXT NOT NULL,
+        status TEXT NOT NULL,
+        createdAt TEXT NOT NULL
       );
     `);
   }
@@ -179,6 +199,70 @@ export class DataStore {
   listModelUsage(): ModelUsageLog[] {
     const stmt = this.db.prepare("SELECT * FROM model_usage ORDER BY timestamp DESC");
     return stmt.all() as ModelUsageLog[];
+  }
+
+
+  // --- Estimates ---
+  createEstimate(estimate: EstimateStatus): void {
+    const stmt = this.db.prepare(`
+      INSERT INTO estimates (id, customerName, customerPhone, amount, status, touchesSent, nextTouchAt, stopReason, createdAt)
+      VALUES ($id, $customerName, $customerPhone, $amount, $status, $touchesSent, $nextTouchAt, $stopReason, $createdAt)
+    `);
+    stmt.run({
+      $id: estimate.id,
+      $customerName: estimate.customerName,
+      $customerPhone: estimate.customerPhone,
+      $amount: estimate.amount,
+      $status: estimate.status,
+      $touchesSent: estimate.touchesSent,
+      $nextTouchAt: estimate.nextTouchAt || null,
+      $stopReason: estimate.stopReason || null,
+      $createdAt: estimate.createdAt
+    });
+  }
+
+  getEstimate(id: string): EstimateStatus | null {
+    const stmt = this.db.prepare("SELECT * FROM estimates WHERE id = ?");
+    return (stmt.get(id) as EstimateStatus) || null;
+  }
+
+  updateEstimate(estimate: EstimateStatus): void {
+    const stmt = this.db.prepare(`
+      UPDATE estimates SET status = $status, touchesSent = $touchesSent, nextTouchAt = $nextTouchAt, stopReason = $stopReason
+      WHERE id = $id
+    `);
+    stmt.run({
+      $id: estimate.id,
+      $status: estimate.status,
+      $touchesSent: estimate.touchesSent,
+      $nextTouchAt: estimate.nextTouchAt || null,
+      $stopReason: estimate.stopReason || null
+    });
+  }
+
+  // --- Reviews ---
+  createReview(review: ReviewStatus): void {
+    const stmt = this.db.prepare(`
+      INSERT INTO reviews (id, bookingLink, sendAt, status, createdAt)
+      VALUES ($id, $bookingLink, $sendAt, $status, $createdAt)
+    `);
+    stmt.run({
+      $id: review.id,
+      $bookingLink: review.bookingLink,
+      $sendAt: review.sendAt,
+      $status: review.status,
+      $createdAt: review.createdAt
+    });
+  }
+
+  getReview(id: string): ReviewStatus | null {
+    const stmt = this.db.prepare("SELECT * FROM reviews WHERE id = ?");
+    return (stmt.get(id) as ReviewStatus) || null;
+  }
+
+  updateReviewStatus(id: string, status: ReviewStatus["status"]): void {
+    const stmt = this.db.prepare("UPDATE reviews SET status = ? WHERE id = ?");
+    stmt.run(status, id);
   }
 
   close(): void {

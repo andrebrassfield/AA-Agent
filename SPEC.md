@@ -1,5 +1,5 @@
 # SPEC: AA Book, the installable front desk booking agent
-This file is the seed spec for the repo ArkansasAutomated/aa-book-cli. Every build session starts by reading it. If a session's instructions conflict with this file, this file wins unless the session prompt says otherwise explicitly.
+This file is the seed spec for the repo andrebrassfield/AA-Agent. Every build session starts by reading it. If a session's instructions conflict with this file, this file wins unless the session prompt says otherwise explicitly.
 
 ## What this is
 AA Book is Arkansas Automated's front desk product, sold to home services shops and appointment businesses: it answers calls and texts, books jobs onto the calendar, chases open estimates, and asks for reviews. Until now it lived as a hosted web project. This repo rebuilds it as a command line install: one package Dre installs per client on a small always-on machine, configured per client from files, powered by a swappable agent engine, and routed across swappable model providers.

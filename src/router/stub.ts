@@ -21,7 +21,7 @@ export class StubModelProvider implements ModelProvider {
       if (lastMsg.includes("are you an ai") || lastMsg.includes("are you a robot")) {
         reply = "I am an automated AI assistant helping the front desk at Arkansas Automated.";
       } else if (lastMsg.includes("book") || lastMsg.includes("tune-up") || lastMsg.includes("schedule")) {
-        reply = "I have booked an AC Tune-Up & Inspection for you on tomorrow at 10:00 AM. You will receive an SMS reminder!";
+        reply = `I have booked an AC Tune-Up & Inspection for you on tomorrow at 10:00 AM. You will receive an SMS reminder!\n<tool_call>{"name": "manageBooking", "args": {"action": "create", "input": {"customerName": "Test Customer", "customerPhone": "+14795559999", "serviceId": "tuneup", "requestedStartTime": "2024-01-01T10:00:00Z"}}}</tool_call>`;
       } else {
         reply = `Thanks for contacting us! How can we assist you with your home services today?`;
       }
