@@ -42,7 +42,8 @@ export async function handleReviewRequestWorkflow(
 
   if (!review) {
     store.createReview({
-      id: input.bookingId,
+      id: store.generateId("rev"),
+      bookingId: input.bookingId,
       bookingLink: reviewLink,
       sendAt: scheduledTime,
       status: "pending",
@@ -55,7 +56,7 @@ export async function handleReviewRequestWorkflow(
 
   store.updateReviewStatus(input.bookingId, "sent");
 
-  const auditId = `aud-rev-${Date.now()}`;
+  const auditId = store.generateId("aud-rev");
   store.logAudit({
     id: auditId,
     action: "REVIEW_REQUEST_SENT",

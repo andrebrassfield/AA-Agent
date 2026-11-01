@@ -20,7 +20,7 @@ export interface BookingWorkflowResult {
   error?: string;
 }
 
-function isWithinBusinessHours(start: Date, end: Date, config: ClientConfig): boolean {
+export function isWithinBusinessHours(start: Date, end: Date, config: ClientConfig): boolean {
   const dayMap = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
   const startDay = dayMap[start.getUTCDay()];
   const hours = (config.business.hours as any)[startDay];
@@ -102,7 +102,7 @@ export async function handleBookingWorkflow(
     }
 
     const newEv = await calendar.createEvent({
-      id: `ev-${Date.now()}-${Math.floor(Math.random()*1000)}`,
+      id: store.generateId("ev"),
       title: `${service.name} - ${b.customerName}`,
       startTime: startIso,
       endTime: endIso,
@@ -112,7 +112,7 @@ export async function handleBookingWorkflow(
     store.updateBookingStatus(b.id, "rescheduled");
     const newBooking: Booking = {
       ...b,
-      id: `bk-${Date.now()}-${Math.floor(Math.random()*1000)}`,
+      id: store.generateId("bk"),
       startTime: startIso,
       endTime: endIso,
       status: "confirmed",
@@ -162,7 +162,7 @@ export async function handleBookingWorkflow(
 
   // Create calendar event
   const calendarEvent = await calendar.createEvent({
-    id: `ev-${Date.now()}-${Math.floor(Math.random()*1000)}`,
+    id: store.generateId("ev"),
     title: `${service.name} - ${input.customerName}`,
     startTime: startIso,
     endTime: endIso,
@@ -171,7 +171,7 @@ export async function handleBookingWorkflow(
   });
 
   const booking: Booking = {
-    id: `bk-${Date.now()}-${Math.floor(Math.random()*1000)}`,
+    id: store.generateId("bk"),
     customerName: input.customerName,
     customerPhone: input.customerPhone,
     serviceId: service.id,
@@ -202,7 +202,7 @@ export async function handleBookingWorkflow(
   ];
 
   store.logAudit({
-    id: `aud-bk-${Date.now()}`,
+    id: store.generateId("aud-bk"),
     action: "BOOKING_CONFIRMED",
     entityType: "booking",
     entityId: booking.id,

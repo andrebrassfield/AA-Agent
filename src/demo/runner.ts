@@ -221,7 +221,7 @@ export async function runDemo(verbose: boolean = true, usePiEngine: boolean = fa
   log("---------------------------------------------------------------");
   log("[WORKFLOW 3/4] Estimate Follow-up Touches");
   log("---------------------------------------------------------------");
-  const estimateId = "est-8831";
+  const estimateId = store.generateId("est");
   store.createEstimate({
     id: estimateId,
     customerName: "Sarah Miller",

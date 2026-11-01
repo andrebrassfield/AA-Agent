@@ -100,4 +100,63 @@ describe("Local Data Store (SQLite)", () => {
     const spend = store.getTodaySpend(today);
     expect(spend).toBeCloseTo(0.006, 4);
   });
+
+  it("mints collision-free IDs under a tight-loop audit write burst", () => {
+    const count = 500;
+    const returnedIds = new Set<string>();
+
+    for (let i = 0; i < count; i++) {
+      const id = store.logAudit({
+        action: "TIGHT_LOOP_TEST",
+        entityType: "audit_burst",
+        entityId: `item-${i}`,
+        details: { iteration: i },
+      });
+      returnedIds.add(id);
+    }
+
+    const storedLogs = store.listAuditLogs();
+    expect(storedLogs.length).toBe(count);
+    expect(returnedIds.size).toBe(count);
+
+    const storedIds = new Set(storedLogs.map((entry) => entry.id));
+    expect(storedIds.size).toBe(count);
+
+    // Also verify helper mints unique prefixed IDs across other entity inserts
+    const bookingId = store.createBooking({
+      customerName: "Burst Customer",
+      customerPhone: "+14795550177",
+      serviceId: "ac-tuneup",
+      serviceName: "AC Tune-Up",
+      startTime: "2026-11-02T10:00:00Z",
+      endTime: "2026-11-02T11:00:00Z",
+      status: "confirmed",
+    });
+    const estimateId = store.createEstimate({
+      customerName: "Burst Customer",
+      customerPhone: "+14795550177",
+      amount: 1200,
+      status: "open",
+      touchesSent: "[]",
+    });
+    const reviewId = store.createReview({
+      bookingId,
+      bookingLink: "https://example.com/review",
+      sendAt: "2026-11-02T14:00:00Z",
+      status: "pending",
+    });
+    const usageId = store.logModelUsage({
+      provider: "stub",
+      model: "stub-aux",
+      taskClass: "aux",
+      promptTokens: 10,
+      completionTokens: 5,
+      costUsd: 0.0001,
+    });
+
+    expect(bookingId.startsWith("bk-")).toBe(true);
+    expect(estimateId.startsWith("est-")).toBe(true);
+    expect(reviewId.startsWith("rev-")).toBe(true);
+    expect(usageId.startsWith("mu-")).toBe(true);
+  });
 });

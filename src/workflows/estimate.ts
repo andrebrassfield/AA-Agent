@@ -1,13 +1,11 @@
 import type { ClientConfig } from "../types/config.ts";
 import type { DataStore } from "../db/store.ts";
+import type { EstimateStatus } from "../types/db.ts";
 
 export interface EstimateTouchPlan {
   day: number;
   message: string;
 }
-
-import type { EstimateStatus } from "../types/db.ts";
-
 
 /**
  * Estimate follow-up workflow: open estimates get touches on day 2, day 5, and day 10
@@ -32,6 +30,44 @@ export function getEstimateTouchMessage(
   }
 }
 
+/**
+ * Stops pending automated follow-ups for any open estimate belonging to customerPhone,
+ * regardless of whether the customer replied via SMS or Voice.
+ */
+export function stopOpenEstimatesForCustomerReply(
+  customerPhone: string,
+  channel: "sms" | "voice",
+  store: DataStore
+): EstimateStatus[] {
+  const openEstimates = store.listOpenEstimatesByPhone(customerPhone);
+  const stopped: EstimateStatus[] = [];
+
+  for (const estimate of openEstimates) {
+    estimate.status = "replied";
+    estimate.nextTouchAt = undefined;
+    estimate.stopReason = `Customer replied via ${channel} - stopping automated follow-ups`;
+    store.updateEstimate(estimate);
+    store.cancelFollowUpsForEntity("estimate", estimate.id);
+
+    store.logAudit({
+      id: store.generateId("aud-est-stop"),
+      action: "ESTIMATE_TOUCH_STOPPED",
+      entityType: "estimate",
+      entityId: estimate.id,
+      details: {
+        reason: estimate.stopReason,
+        channel,
+        customerPhone,
+      },
+      timestamp: new Date().toISOString(),
+    });
+
+    stopped.push(estimate);
+  }
+
+  return stopped;
+}
+
 export async function processEstimateFollowUpTouch(
   estimateId: string,
   targetDay: 2 | 5 | 10,
@@ -39,22 +75,24 @@ export async function processEstimateFollowUpTouch(
   store: DataStore,
   customerReplied: boolean = false
 ): Promise<{ touchSent: boolean; reason?: string; message?: string }> {
-  let estimate = store.getEstimate(estimateId);
+  const estimate = store.getEstimate(estimateId);
   if (!estimate) {
     return { touchSent: false, reason: "Estimate not found." };
   }
 
-  let touchesSent = JSON.parse(estimate.touchesSent) as number[];
+  const touchesSent = JSON.parse(estimate.touchesSent) as number[];
 
   if (estimate.status !== "open" || customerReplied) {
     if (customerReplied && estimate.status === "open") {
       estimate.status = "replied";
+      estimate.nextTouchAt = undefined;
       estimate.stopReason = "Customer replied - stopping automated follow-ups";
       store.updateEstimate(estimate);
+      store.cancelFollowUpsForEntity("estimate", estimate.id);
     }
 
     store.logAudit({
-      id: `aud-est-stop-${Date.now()}`,
+      id: store.generateId("aud-est-stop"),
       action: "ESTIMATE_TOUCH_STOPPED",
       entityType: "estimate",
       entityId: estimate.id,
@@ -75,7 +113,7 @@ export async function processEstimateFollowUpTouch(
   store.updateEstimate(estimate);
 
   store.logAudit({
-    id: `aud-est-touch-${Date.now()}-${targetDay}`,
+    id: store.generateId(`aud-est-touch-${targetDay}`),
     action: `ESTIMATE_TOUCH_DAY_${targetDay}`,
     entityType: "estimate",
     entityId: estimate.id,

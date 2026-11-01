@@ -66,7 +66,7 @@ export class ProviderRouter {
     // SPEC: Every model call logs provider, model, task class, and token counts.
     if (this.store) {
       this.store.logModelUsage({
-        id: `mu-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+        id: this.store.generateId("mu"),
         provider: response.provider,
         model: response.model,
         taskClass: response.taskClass,
