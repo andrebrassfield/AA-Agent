@@ -42,7 +42,7 @@ export function runStatus(options: StatusOptions = {}): {
     console.log(`   - Phone:     ${cfg.business.phoneNumbers.main}`);
     console.log(`   - Services:  ${cfg.services.services.length} registered`);
     console.log(`   - Staff:     ${cfg.staff.staff.length} staff member(s)`);
-    console.log(`   - Voice:     ${cfg.persona.voiceChoice} (Tone: ${cfg.persona.tone})`);
+    console.log(`   - Voice:     ${cfg.persona.voiceChoice} (Tone: ${cfg.persona.tone}, Provider: ${cfg.channels?.voice.provider ?? "retell"})`);
   }
 
   console.log("---------------------------------------------------------------");

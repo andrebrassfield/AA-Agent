@@ -27,6 +27,7 @@ export function runInstall(options: InstallOptions = {}): { success: boolean; cl
   const envExamplePath = join(baseDir, ".env.example");
   if (!existsSync(envExamplePath)) {
     const envExample = `# AA Book Environment Secrets (env only, gitignored)
+WEBHOOK_SECRET=
 OPENROUTER_API_KEY=
 NVIDIA_NIM_API_KEY=
 GEMINI_API_KEY=

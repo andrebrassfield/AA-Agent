@@ -8,7 +8,9 @@ import {
   validateStaffConfig,
   validatePersonaConfig,
   validatePoliciesConfig,
+  validateChannelsConfig,
   DEFAULT_AI_DISCLOSURE,
+  DEFAULT_CHANNELS_CONFIG,
 } from "../config/validator.ts";
 import type { ClientConfig } from "../types/config.ts";
 
@@ -54,6 +56,7 @@ export async function runSetup(options: SetupOptions = {}): Promise<ClientConfig
         deposit: { required: false, type: "fixed", amount: 0 },
         serviceArea: { primaryZipCodes: ["72901"] },
       },
+      channels: options.nonInteractiveDefaults.channels || DEFAULT_CHANNELS_CONFIG,
     };
     writeClientConfig(clientDir, cfg);
     console.log("Wrote configurations successfully via defaults.");
@@ -183,12 +186,28 @@ export async function runSetup(options: SetupOptions = {}): Promise<ClientConfig
       throw new Error(`Policies config invalid: ${policiesValidation.errors.map((e) => e.message).join(", ")}`);
     }
 
+    console.log("\n6. Channels");
+    const voiceProvInput = await ask("Voice Provider (retell, elevenlabs)", "retell");
+    const channels = {
+      voice: {
+        provider: (voiceProvInput === "elevenlabs" ? "elevenlabs" : "retell") as "retell" | "elevenlabs",
+      },
+      sms: {
+        provider: "stub" as const,
+      },
+    };
+    const channelsValidation = validateChannelsConfig(channels);
+    if (!channelsValidation.valid) {
+      throw new Error(`Channels config invalid: ${channelsValidation.errors.map((e) => e.message).join(", ")}`);
+    }
+
     const config: ClientConfig = {
       business,
       services,
       staff,
       persona,
       policies,
+      channels,
     };
 
     writeClientConfig(clientDir, config);

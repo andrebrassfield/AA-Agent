@@ -7,8 +7,19 @@ import { CoreEngine } from "../engine/core.ts";
 import { handleMissedCallTextBack } from "../workflows/missed_call.ts";
 import { handleBookingWorkflow } from "../workflows/booking.ts";
 import { processEstimateFollowUpTouch } from "../workflows/estimate.ts";
-import type { EstimateStatus } from "../types/db.ts";
 import { handleReviewRequestWorkflow } from "../workflows/review.ts";
+import { startWebhookServer } from "../server/server.ts";
+import { StubSmsProvider } from "../channels/sms/stub.ts";
+
+function getFutureWednesdayElevenUtc(): string {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() + 7);
+  while (d.getUTCDay() !== 3) {
+    d.setUTCDate(d.getUTCDate() + 1);
+  }
+  d.setUTCHours(11, 0, 0, 0);
+  return d.toISOString();
+}
 
 export interface DemoRunOutput {
   transcript: string[];
@@ -93,8 +104,11 @@ export async function runDemo(verbose: boolean = true, usePiEngine: boolean = fa
   log(`[CALLER -> SMS]: "I need to book an AC Tune-Up for tomorrow at 10 AM please."`);
 
   const tomorrowTenAm = new Date();
-  tomorrowTenAm.setDate(tomorrowTenAm.getDate() + 1);
-  tomorrowTenAm.setHours(10, 0, 0, 0);
+  tomorrowTenAm.setUTCDate(tomorrowTenAm.getUTCDate() + 1);
+  while (tomorrowTenAm.getUTCDay() === 0 || tomorrowTenAm.getUTCDay() === 6) {
+    tomorrowTenAm.setUTCDate(tomorrowTenAm.getUTCDate() + 1);
+  }
+  tomorrowTenAm.setUTCHours(10, 0, 0, 0);
 
   let bookingResult: any;
   const bookingEngineTurn = await engine.processTurn({
@@ -221,7 +235,7 @@ export async function runDemo(verbose: boolean = true, usePiEngine: boolean = fa
   log("---------------------------------------------------------------");
   log("[WORKFLOW 3/4] Estimate Follow-up Touches");
   log("---------------------------------------------------------------");
-  const estimateId = "est-8831";
+  const estimateId = store.generateId("est");
   store.createEstimate({
     id: estimateId,
     customerName: "Sarah Miller",
@@ -265,6 +279,104 @@ export async function runDemo(verbose: boolean = true, usePiEngine: boolean = fa
     store
   );
   log(`[AGENT -> SMS Review Ask]: "${reviewResult.messageText}"`);
+
+  // --- Channels Pass: Webhook Server -> Missed Call -> Text-Back -> SMS Booking ---
+  log("");
+  log("---------------------------------------------------------------");
+  log("[CHANNELS PASS] Webhook Server: Missed Call -> Text-Back -> Booked Job");
+  log("---------------------------------------------------------------");
+
+  const channelCaller = "+14795557700";
+  const channelSlotIso = getFutureWednesdayElevenUtc();
+  const demoWebhookSecret = "demo-ephemeral-webhook-secret";
+  const stubSms = new StubSmsProvider();
+
+  const channelRouter = new ProviderRouter(
+    {
+      dailySpendCapUsd: 1.0,
+      routes: {
+        conversation: { chain: [{ provider: "stub-channel-conv", model: "meta/llama-3-70b-instruct" }] },
+        reasoning: { chain: [{ provider: "stub-channel-reason", model: "google/gemini-1.5-flash" }] },
+        aux: { chain: [{ provider: "stub-channel-aux", model: "meta/llama-3-8b-instruct:free" }] },
+      },
+    },
+    store
+  );
+  channelRouter.registerProvider(
+    new StubModelProvider("stub-channel-conv", () => {
+      return `I have booked your AC Tune-Up & Precision Inspection!\n<tool_call>{"name": "manageBooking", "args": {"action": "create", "input": {"customerName": "Elena Brooks", "customerPhone": "${channelCaller}", "serviceId": "ac-tuneup", "requestedStartTime": "${channelSlotIso}"}}}</tool_call>`;
+    })
+  );
+  channelRouter.registerProvider(new StubModelProvider("stub-channel-reason"));
+  channelRouter.registerProvider(new StubModelProvider("stub-channel-aux"));
+
+  const channelEngine = new CoreEngine(channelRouter);
+  const webhookServer = startWebhookServer({
+    port: 0,
+    webhookSecret: demoWebhookSecret,
+    clientConfig: FORT_SMITH_HVAC_CONFIG,
+    store,
+    calendar,
+    engine: channelEngine,
+    router: channelRouter,
+    smsProvider: stubSms,
+  });
+
+  try {
+    log(`[SERVER] Started local Bun webhook server on ${webhookServer.url} (provider: ${webhookServer.voiceAdapter.name}, sms: ${webhookServer.smsProvider.name})`);
+
+    const missedCallRes = await fetch(`${webhookServer.url}/webhooks/voice`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-webhook-secret": demoWebhookSecret,
+      },
+      body: JSON.stringify({
+        event: "call_ended",
+        call: {
+          call_id: "retell_demo_missed_call_01",
+          from_number: channelCaller,
+          to_number: FORT_SMITH_HVAC_CONFIG.business.phoneNumbers.main,
+          direction: "inbound",
+          disconnection_reason: "dial_no_answer",
+          duration_ms: 0,
+        },
+      }),
+    });
+
+    if (!missedCallRes.ok || stubSms.sentMessages.length !== 1) {
+      throw new Error("Channels pass failed to send missed-call greeting text-back on stub SMS provider.");
+    }
+    log(`[WEBHOOK -> /webhooks/voice] Unanswered Retell call retell_demo_missed_call_01 from ${channelCaller}`);
+    log(`[STUB SMS -> ${channelCaller}]: "${stubSms.sentMessages[0].body}"`);
+
+    const smsInboundRes = await fetch(`${webhookServer.url}/webhooks/sms`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-webhook-secret": demoWebhookSecret,
+      },
+      body: JSON.stringify({
+        messageId: "sms_demo_inbound_01",
+        from: channelCaller,
+        to: FORT_SMITH_HVAC_CONFIG.business.phoneNumbers.sms,
+        body: `Hi! This is Elena Brooks, please book an AC Tune-Up for ${channelSlotIso}.`,
+      }),
+    });
+
+    const smsInboundData = (await smsInboundRes.json()) as { bookingId?: string; reply?: string };
+    const totalStubMessagesSent: number = stubSms.sentMessages.length;
+    if (!smsInboundRes.ok || !smsInboundData.bookingId || totalStubMessagesSent !== 2) {
+      throw new Error("Channels pass failed to complete end-to-end SMS booking via webhook.");
+    }
+
+    log(`[WEBHOOK -> /webhooks/sms] Inbound text from ${channelCaller}: "Hi! This is Elena Brooks, please book an AC Tune-Up..."`);
+    log(`[BOOKING CREATED VIA CHANNEL] ID: ${smsInboundData.bookingId} | Slot: ${channelSlotIso}`);
+    log(`[STUB SMS -> ${channelCaller}]: "${stubSms.sentMessages[1].body}"`);
+  } finally {
+    await webhookServer.stop();
+    log(`[SERVER] Stopped local Bun webhook server cleanly.`);
+  }
 
   // --- Audit Log Dump ---
   log("");

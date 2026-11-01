@@ -90,7 +90,7 @@ export class PiEngine implements EngineAdapter {
                const store = (this.router as any).store;
                if (store) {
                  store.logModelUsage({
-                    id: `mu-pi-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+                    id: store.generateId("mu-pi"),
                     provider: parsed.usage.provider || "pi-agent",
                     model: parsed.usage.model || "unknown",
                     taskClass: "conversation",
