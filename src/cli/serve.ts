@@ -8,7 +8,9 @@ import { PiEngine } from "../engine/pi.ts";
 import { buildConfiguredRouter } from "../router/providers.ts";
 import type { ProviderRouter } from "../router/router.ts";
 import { startWebhookServer, type RunningWebhookServer } from "../server/server.ts";
+import type { SmsProvider } from "../types/channels.ts";
 import type { EngineAdapter } from "../types/engine.ts";
+import { DEFAULT_FOLLOWUP_TICK_MS, FollowUpDispatcher } from "../workflows/dispatcher.ts";
 import { resolveClientDailySpendCap } from "./usage.ts";
 
 export interface ServeCliOptions {
@@ -17,6 +19,10 @@ export interface ServeCliOptions {
   clientDir?: string;
   dataDir?: string;
   webhookSecret?: string;
+  followUpTickMs?: number;
+  demoMode?: boolean;
+  now?: () => Date;
+  smsProvider?: SmsProvider;
   /**
    * Used in tests to receive the running server handle and control lifecycle cleanly
    * without blocking indefinitely on SIGINT/SIGTERM.
@@ -27,11 +33,24 @@ export interface ServeCliOptions {
 export interface ServeHandle {
   server: RunningWebhookServer;
   store: DataStore;
+  dispatcher: FollowUpDispatcher;
   shutdown: () => Promise<void>;
 }
 
-export function parseServeArgs(args: string[]): { port?: number; hostname?: string; clientDir?: string; dataDir?: string } {
-  const parsed: { port?: number; hostname?: string; clientDir?: string; dataDir?: string } = {};
+export function parseServeArgs(args: string[]): {
+  port?: number;
+  hostname?: string;
+  clientDir?: string;
+  dataDir?: string;
+  followUpTickMs?: number;
+} {
+  const parsed: {
+    port?: number;
+    hostname?: string;
+    clientDir?: string;
+    dataDir?: string;
+    followUpTickMs?: number;
+  } = {};
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if ((arg === "--port" || arg === "-p") && args[i + 1]) {
@@ -42,9 +61,31 @@ export function parseServeArgs(args: string[]): { port?: number; hostname?: stri
       parsed.clientDir = args[++i];
     } else if (arg === "--data-dir" && args[i + 1]) {
       parsed.dataDir = args[++i];
+    } else if (arg === "--tick-ms" && args[i + 1]) {
+      parsed.followUpTickMs = Number(args[++i]);
     }
   }
   return parsed;
+}
+
+function resolveFollowUpTickMs(options: ServeCliOptions, policyTickMs?: number): number {
+  if (options.demoMode) {
+    return 0;
+  }
+  if (options.followUpTickMs !== undefined && Number.isFinite(options.followUpTickMs)) {
+    return Math.max(0, options.followUpTickMs);
+  }
+  if (policyTickMs !== undefined && Number.isFinite(policyTickMs)) {
+    return Math.max(0, policyTickMs);
+  }
+  const envRaw = process.env.FOLLOWUP_TICK_INTERVAL_MS;
+  if (envRaw && envRaw.trim().length > 0) {
+    const parsed = Number(envRaw.trim());
+    if (Number.isFinite(parsed) && parsed >= 0) {
+      return parsed;
+    }
+  }
+  return DEFAULT_FOLLOWUP_TICK_MS;
 }
 
 export async function startServe(options: ServeCliOptions = {}): Promise<ServeHandle> {
@@ -112,24 +153,41 @@ export async function startServe(options: ServeCliOptions = {}): Promise<ServeHa
       calendar,
       engine,
       router,
+      smsProvider: options.smsProvider,
     });
   } catch (err) {
     store.close();
     throw err;
   }
 
+  const tickIntervalMs = resolveFollowUpTickMs(options, loaded.config.policies.followUpTickIntervalMs);
+  const dispatcher = new FollowUpDispatcher({
+    clientConfig: loaded.config,
+    store,
+    smsProvider: server.smsProvider,
+    tickIntervalMs,
+    demoMode: options.demoMode,
+    now: options.now,
+  });
+  dispatcher.start();
+
   let stopped = false;
   const shutdown = async () => {
     if (stopped) return;
     stopped = true;
+    await dispatcher.stop();
     await server.stop();
     store.close();
   };
 
   console.log(`AA Book webhook server listening on ${server.url}`);
   console.log(`- Business:       ${loaded.config.business.name}`);
+  console.log(`- Engine:         ${engine.name}`);
   console.log(`- Voice provider: ${server.voiceAdapter.name}`);
   console.log(`- SMS provider:   ${server.smsProvider.name}`);
+  console.log(
+    `- Follow-up tick: ${dispatcher.isRunning ? `every ${dispatcher.tickIntervalMs}ms` : "disabled"}`
+  );
   console.log(`- Webhook auth:   WEBHOOK_SECRET ([REDACTED])`);
 
   if (options.waitForSignal !== false) {
@@ -145,5 +203,5 @@ export async function startServe(options: ServeCliOptions = {}): Promise<ServeHa
     });
   }
 
-  return { server, store, shutdown };
+  return { server, store, dispatcher, shutdown };
 }

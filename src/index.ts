@@ -30,6 +30,7 @@ Options:
   --service     With 'aabook install', generate launchd plist (macOS) or systemd user unit (Linux)
   --force, -f   With 'aabook restore', allow overwriting a non-empty data directory
   --port, -p    Port for 'aabook serve' (default: 3000 or PORT env)
+  --tick-ms     Follow-up dispatcher tick interval in ms for 'aabook serve' (default: 15000; 0 disables)
   --help, -h    Show help
   --version, -v Show version
 `);
