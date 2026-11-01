@@ -1,14 +1,19 @@
 # Dependencies
 node_modules/
 
-# Local data & environment
+# Local data, client config, backups, & environment
 .env
 .env.*
 !.env.example
+client/
 data/
+backups/
+logs/
+service/
 *.sqlite
 *.sqlite-journal
 *.sqlite-wal
+*.sqlite-shm
 *.log
 
 # Build outputs
