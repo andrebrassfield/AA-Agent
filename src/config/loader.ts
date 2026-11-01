@@ -9,6 +9,7 @@ import type {
   ChannelsConfig,
   ClientConfig,
 } from "../types/config.ts";
+import type { ClientRouterConfig } from "../types/router.ts";
 import {
   validateBusinessConfig,
   validateServicesConfig,
@@ -16,6 +17,7 @@ import {
   validatePersonaConfig,
   validatePoliciesConfig,
   validateChannelsConfig,
+  validateRouterConfig,
   DEFAULT_CHANNELS_CONFIG,
 } from "./validator.ts";
 
@@ -28,7 +30,10 @@ export interface LoadConfigResult {
 export function loadClientConfig(clientDir: string): LoadConfigResult {
   const errors: { file: string; issues: string[] }[] = [];
 
-  const readJson = <T>(filename: string, validator: (data: unknown) => { valid: boolean; data?: T; errors: { message: string }[] }): T | null => {
+  const readJson = <T>(
+    filename: string,
+    validator: (data: unknown) => { valid: boolean; data?: T; errors: { message: string }[] }
+  ): T | null => {
     const fullPath = join(clientDir, filename);
     if (!existsSync(fullPath)) {
       errors.push({ file: filename, issues: [`File not found at ${fullPath}`] });
@@ -70,6 +75,14 @@ export function loadClientConfig(clientDir: string): LoadConfigResult {
     }
   }
 
+  let router: ClientRouterConfig | undefined;
+  if (existsSync(join(clientDir, "router.json"))) {
+    const loadedRouter = readJson<ClientRouterConfig>("router.json", validateRouterConfig);
+    if (loadedRouter) {
+      router = loadedRouter;
+    }
+  }
+
   if (errors.length > 0 || !business || !services || !staff || !persona || !policies) {
     return { success: false, errors };
   }
@@ -83,6 +96,7 @@ export function loadClientConfig(clientDir: string): LoadConfigResult {
       persona,
       policies,
       channels,
+      ...(router ? { router } : {}),
     },
     errors: [],
   };
@@ -97,5 +111,8 @@ export function writeClientConfig(clientDir: string, config: ClientConfig): void
   writeFileSync(join(clientDir, "policies.json"), JSON.stringify(config.policies, null, 2), "utf-8");
   if (config.channels) {
     writeFileSync(join(clientDir, "channels.json"), JSON.stringify(config.channels, null, 2), "utf-8");
+  }
+  if (config.router) {
+    writeFileSync(join(clientDir, "router.json"), JSON.stringify(config.router, null, 2), "utf-8");
   }
 }

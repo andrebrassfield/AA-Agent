@@ -99,9 +99,11 @@ export const STARTER_CLIENT_CONFIG: ClientConfig = {
 
 const ENV_EXAMPLE_TEMPLATE = `# AA Book Environment Secrets (env only, gitignored — never place secrets in client/*.json)
 WEBHOOK_SECRET=
+OPENAI_API_KEY=
+ANTHROPIC_API_KEY=
+GEMINI_API_KEY=
 OPENROUTER_API_KEY=
 NVIDIA_NIM_API_KEY=
-GEMINI_API_KEY=
 RETELL_API_KEY=
 ELEVENLABS_API_KEY=
 GOOGLE_CALENDAR_ID=

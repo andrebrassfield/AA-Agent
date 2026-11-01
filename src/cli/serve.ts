@@ -5,8 +5,8 @@ import { DataStore } from "../db/store.ts";
 import { CoreEngine } from "../engine/core.ts";
 import { OmpEngine } from "../engine/omp.ts";
 import { PiEngine } from "../engine/pi.ts";
-import { ProviderRouter } from "../router/router.ts";
-import { StubModelProvider } from "../router/stub.ts";
+import { buildConfiguredRouter } from "../router/providers.ts";
+import type { ProviderRouter } from "../router/router.ts";
 import { startWebhookServer, type RunningWebhookServer } from "../server/server.ts";
 import type { EngineAdapter } from "../types/engine.ts";
 import { resolveClientDailySpendCap } from "./usage.ts";
@@ -67,18 +67,11 @@ export async function startServe(options: ServeCliOptions = {}): Promise<ServeHa
   const store = new DataStore(dbPath);
 
   const { dailySpendCapUsd } = resolveClientDailySpendCap(clientDir);
-  const router = new ProviderRouter(
-    {
-      dailySpendCapUsd,
-      routes: {
-        conversation: { chain: [{ provider: "stub", model: "stub-conversation" }] },
-        reasoning: { chain: [{ provider: "stub", model: "stub-reasoning" }] },
-        aux: { chain: [{ provider: "stub", model: "stub-aux" }] },
-      },
-    },
-    store
-  );
-  router.registerProvider(new StubModelProvider("stub"));
+  const router: ProviderRouter = buildConfiguredRouter({
+    clientConfig: loaded.config,
+    dailySpendCapUsd,
+    store,
+  });
 
   const engineChoice = (process.env.AABOOK_ENGINE || "core").toLowerCase();
   let engine: EngineAdapter;

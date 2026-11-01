@@ -1,3 +1,5 @@
+import type { ClientRouterConfig } from "./router.ts";
+
 /**
  * Config schemas for AA Book client folders:
  * - business.json
@@ -6,6 +8,7 @@
  * - persona.json
  * - policies.json
  * - channels.json (optional; defaults to retell voice + stub sms)
+ * - router.json (optional; defaults to live HTTP provider chains)
  */
 
 export interface BusinessConfig {
@@ -83,6 +86,12 @@ export interface PersonaConfig {
   businessContext?: string;
 }
 
+export interface QuietHoursPolicy {
+  start: string;     // 24h local time "HH:MM", e.g. "20:00"
+  end: string;       // 24h local time "HH:MM", e.g. "08:00"
+  timezone?: string; // Optional IANA timezone override; defaults to business.timezone
+}
+
 export interface PoliciesConfig {
   cancellation: {
     noticePeriodHours: number;
@@ -100,6 +109,8 @@ export interface PoliciesConfig {
     travelFee?: number;
   };
   dailySpendCapUsd?: number;
+  quietHours?: QuietHoursPolicy;
+  followUpTickIntervalMs?: number;
 }
 
 export interface ChannelsConfig {
@@ -118,6 +129,7 @@ export interface ClientConfig {
   persona: PersonaConfig;
   policies: PoliciesConfig;
   channels?: ChannelsConfig;
+  router?: ClientRouterConfig;
 }
 
 export interface ValidationIssue {
