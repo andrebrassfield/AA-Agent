@@ -47,15 +47,97 @@ describe("Engine Adapters & Provider Router", () => {
       {
         dailySpendCapUsd: 0.05,
         routes: {
-          conversation: { defaultProvider: "stub", defaultModel: "stub-chat" },
-          reasoning: { defaultProvider: "stub", defaultModel: "stub-reason" },
-          aux: { defaultProvider: "stub", defaultModel: "stub-aux" },
+          conversation: { chain: [{ provider: "stub", model: "stub-chat" }] },
+          reasoning: { chain: [{ provider: "stub", model: "stub-reason" }] },
+          aux: { chain: [{ provider: "stub", model: "stub-aux" }] },
         },
       },
       store
     );
     stubProvider = new StubModelProvider("stub");
     router.registerProvider(stubProvider);
+  });
+
+
+  it("falls back to the next provider in the chain if the first one throws (e.g. 404)", async () => {
+    // Setup a new router with a chain
+    const chainRouter = new ProviderRouter(
+      {
+        dailySpendCapUsd: 1.0,
+        routes: {
+          conversation: {
+            chain: [
+              { provider: "stub-fail", model: "fail-chat" },
+              { provider: "stub-success", model: "success-chat" }
+            ]
+          },
+          reasoning: { chain: [{ provider: "stub", model: "stub-reason" }] },
+          aux: { chain: [{ provider: "stub", model: "stub-aux" }] },
+        },
+      },
+      store
+    );
+
+    const failProvider = new StubModelProvider("stub-fail", () => {
+      throw new Error("HTTP 404 Not Found");
+    });
+
+    const successProvider = new StubModelProvider("stub-success", () => {
+      return "Success from fallback provider!";
+    });
+
+    chainRouter.registerProvider(failProvider);
+    chainRouter.registerProvider(successProvider);
+
+    const res = await chainRouter.complete({
+      taskClass: "conversation",
+      messages: [{ role: "user", content: "Hello!" }],
+    });
+
+    // Should succeed because it fell back
+    expect(res.provider).toBe("stub-success");
+    expect(res.content).toBe("Success from fallback provider!");
+  });
+
+
+  it("falls back to the next provider in the chain if the first one throws (e.g. 404)", async () => {
+    // Setup a new router with a chain
+    const chainRouter = new ProviderRouter(
+      {
+        dailySpendCapUsd: 1.0,
+        routes: {
+          conversation: {
+            chain: [
+              { provider: "stub-fail", model: "fail-chat" },
+              { provider: "stub-success", model: "success-chat" }
+            ]
+          },
+          reasoning: { chain: [{ provider: "stub", model: "stub-reason" }] },
+          aux: { chain: [{ provider: "stub", model: "stub-aux" }] },
+        },
+      },
+      store
+    );
+
+    const failProvider = new StubModelProvider("stub-fail", () => {
+      throw new Error("HTTP 404 Not Found");
+    });
+
+    const successProvider = new StubModelProvider("stub-success", () => {
+      return "Success from fallback provider!";
+    });
+
+    chainRouter.registerProvider(failProvider);
+    chainRouter.registerProvider(successProvider);
+
+    const res = await chainRouter.complete({
+      taskClass: "conversation",
+      messages: [{ role: "user", content: "Hello!" }],
+    });
+
+    // Should succeed because it fell back
+    expect(res.provider).toBe("stub-success");
+    expect(res.content).toBe("Success from fallback provider!");
   });
 
   it("routes conversation completions and logs token usage", async () => {
@@ -137,7 +219,8 @@ describe("Engine Adapters & Provider Router", () => {
   });
 
   it("OmpEngine handles stdio requests and honors AI disclosure", async () => {
-    const omp = new OmpEngine("mock-omp");
+    // Note: AI disclosure is handled within OmpEngine before spawning
+    const omp = new OmpEngine("node", ["tests/fixtures/fake-omp.js"]);
     const disclosureTurn = await omp.processTurn({
       userMessage: "Are you a robot?",
       context: {
@@ -149,8 +232,9 @@ describe("Engine Adapters & Provider Router", () => {
     });
     expect(disclosureTurn.reply).toContain("I am an automated AI assistant");
 
+    // This bypasses the guardrail and goes to the fake-omp child process
     const regularTurn = await omp.processTurn({
-      userMessage: "What services do you offer?",
+      userMessage: "Hello harness",
       context: {
         clientConfig: mockClientConfig,
         channel: "sms",
@@ -158,6 +242,28 @@ describe("Engine Adapters & Provider Router", () => {
       },
       conversationHistory: [],
     });
-    expect(regularTurn.reply).toContain("[OMP stdio via mock-omp]");
+    expect(regularTurn.reply).toContain("Echoing from fake harness: Hello harness");
+  });
+
+  it("OmpEngine throws an explicit error when binary is missing", async () => {
+    const omp = new OmpEngine("missing-omp-binary-12345");
+
+    let errorCaught = false;
+    try {
+      await omp.processTurn({
+        userMessage: "Hello",
+        context: {
+          clientConfig: mockClientConfig,
+          channel: "sms",
+          senderPhone: "+14795559999",
+        },
+        conversationHistory: [],
+      });
+    } catch (e: any) {
+      errorCaught = true;
+      expect(e.message).toContain("missing or could not be found");
+    }
+
+    expect(errorCaught).toBe(true);
   });
 });

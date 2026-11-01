@@ -4,10 +4,12 @@ import type { CalendarAdapter } from "../calendar/calendar.ts";
 import type { Booking } from "../types/db.ts";
 
 export interface BookingWorkflowInput {
-  customerName: string;
-  customerPhone: string;
-  serviceId: string;
-  requestedStartTime: string;
+  action: "create" | "reschedule" | "cancel";
+  bookingId?: string;
+  customerName?: string;
+  customerPhone?: string;
+  serviceId?: string;
+  requestedStartTime?: string;
 }
 
 export interface BookingWorkflowResult {
@@ -18,17 +20,118 @@ export interface BookingWorkflowResult {
   error?: string;
 }
 
-/**
- * Booking workflow: check services and rules, read calendar availability
- * (Google Calendar first via its API / CalendarAdapter), create the booking,
- * send confirmation, schedule reminders.
- */
+function isWithinBusinessHours(start: Date, end: Date, config: ClientConfig): boolean {
+  const dayMap = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+  const startDay = dayMap[start.getUTCDay()];
+  const hours = (config.business.hours as any)[startDay];
+
+  if (!hours || hours.closed) return false;
+
+  const getMin = (timeStr: string) => {
+    const [h, m] = timeStr.split(":").map(Number);
+    return h * 60 + m;
+  };
+
+  const reqStartMin = start.getUTCHours() * 60 + start.getUTCMinutes();
+  let reqEndMin = end.getUTCHours() * 60 + end.getUTCMinutes();
+  // Handle cross-day boundary extremely simply for this demo check
+  if (reqEndMin < reqStartMin) {
+     reqEndMin += 24 * 60;
+  }
+
+  const openMin = getMin(hours.open);
+  const closeMin = getMin(hours.close);
+
+  return reqStartMin >= openMin && reqEndMin <= closeMin;
+}
+
 export async function handleBookingWorkflow(
   input: BookingWorkflowInput,
   clientConfig: ClientConfig,
   calendar: CalendarAdapter,
   store: DataStore
 ): Promise<BookingWorkflowResult> {
+  if (input.action === "cancel") {
+    if (!input.bookingId) return { success: false, error: "bookingId required for cancel" };
+    const b = store.getBooking(input.bookingId);
+    if (!b) return { success: false, error: "Booking not found" };
+
+    store.updateBookingStatus(b.id, "cancelled");
+    const evIdMatch = b.notes?.match(/event id: (ev-.*)/);
+    if (evIdMatch) {
+       await calendar.deleteEvent(evIdMatch[1]);
+    }
+
+    return {
+      success: true,
+      booking: { ...b, status: "cancelled" },
+      confirmationSms: `Your appointment with ${clientConfig.business.name} has been cancelled.`
+    };
+  }
+
+  if (input.action === "reschedule") {
+    if (!input.bookingId || !input.requestedStartTime) return { success: false, error: "bookingId and requestedStartTime required" };
+    const b = store.getBooking(input.bookingId);
+    if (!b) return { success: false, error: "Booking not found" };
+
+    const service = clientConfig.services.services.find((s) => s.id === b.serviceId);
+    if (!service) return { success: false, error: "Service not found" };
+
+    const durationMs = (service.durationMinutes + (service.bufferMinutes || 0)) * 60 * 1000;
+    const startTime = new Date(input.requestedStartTime);
+    const endTime = new Date(startTime.getTime() + durationMs);
+
+    if (!isWithinBusinessHours(startTime, endTime, clientConfig)) {
+      return { success: false, error: "Requested time is outside business hours." };
+    }
+
+    const startIso = startTime.toISOString();
+    const endIso = endTime.toISOString();
+
+    const evIdMatch = b.notes?.match(/event id: (ev-.*)/);
+    const evId = evIdMatch ? evIdMatch[1] : null;
+
+    if (evId) {
+       await calendar.deleteEvent(evId);
+    }
+
+    const available = await calendar.checkAvailability(startIso, endIso);
+    if (!available) {
+      if (evId) await calendar.createEvent({ id: evId, title: b.serviceName, startTime: b.startTime, endTime: b.endTime });
+      return { success: false, error: `Requested slot is not available.` };
+    }
+
+    const newEv = await calendar.createEvent({
+      id: `ev-${Date.now()}-${Math.floor(Math.random()*1000)}`,
+      title: `${service.name} - ${b.customerName}`,
+      startTime: startIso,
+      endTime: endIso,
+      attendees: [b.customerPhone],
+    });
+
+    store.updateBookingStatus(b.id, "rescheduled");
+    const newBooking: Booking = {
+      ...b,
+      id: `bk-${Date.now()}-${Math.floor(Math.random()*1000)}`,
+      startTime: startIso,
+      endTime: endIso,
+      status: "confirmed",
+      notes: `Calendar event id: ${newEv.id}`
+    };
+    store.createBooking(newBooking);
+
+    return {
+      success: true,
+      booking: newBooking,
+      confirmationSms: `Your ${service.name} is rescheduled for ${startTime.toLocaleString("en-US", { timeZone: clientConfig.business.timezone })}.`
+    };
+  }
+
+  // Create
+  if (!input.serviceId || !input.requestedStartTime || !input.customerName || !input.customerPhone) {
+    return { success: false, error: "Missing required fields for create" };
+  }
+
   const service = clientConfig.services.services.find((s) => s.id === input.serviceId);
   if (!service) {
     return {
@@ -40,6 +143,10 @@ export async function handleBookingWorkflow(
   const durationMs = (service.durationMinutes + (service.bufferMinutes || 0)) * 60 * 1000;
   const startTime = new Date(input.requestedStartTime);
   const endTime = new Date(startTime.getTime() + durationMs);
+
+  if (!isWithinBusinessHours(startTime, endTime, clientConfig)) {
+    return { success: false, error: "Requested time is outside business hours." };
+  }
 
   const startIso = startTime.toISOString();
   const endIso = endTime.toISOString();
@@ -55,7 +162,7 @@ export async function handleBookingWorkflow(
 
   // Create calendar event
   const calendarEvent = await calendar.createEvent({
-    id: `ev-${Date.now()}`,
+    id: `ev-${Date.now()}-${Math.floor(Math.random()*1000)}`,
     title: `${service.name} - ${input.customerName}`,
     startTime: startIso,
     endTime: endIso,
@@ -64,7 +171,7 @@ export async function handleBookingWorkflow(
   });
 
   const booking: Booking = {
-    id: `bk-${Date.now()}`,
+    id: `bk-${Date.now()}-${Math.floor(Math.random()*1000)}`,
     customerName: input.customerName,
     customerPhone: input.customerPhone,
     serviceId: service.id,
@@ -80,7 +187,6 @@ export async function handleBookingWorkflow(
 
   const confirmationSms = `You're all booked! ${service.name} with ${clientConfig.business.name} is confirmed for ${startTime.toLocaleString("en-US", { timeZone: clientConfig.business.timezone })}. Reply RESCHEDULE if you need to make changes.`;
 
-  // Schedule reminders: 24 hours prior, 2 hours prior
   const reminder24h = new Date(startTime.getTime() - 24 * 60 * 60 * 1000).toISOString();
   const reminder2h = new Date(startTime.getTime() - 2 * 60 * 60 * 1000).toISOString();
 
@@ -95,7 +201,6 @@ export async function handleBookingWorkflow(
     },
   ];
 
-  // Audit log (operational booking confirmation)
   store.logAudit({
     id: `aud-bk-${Date.now()}`,
     action: "BOOKING_CONFIRMED",

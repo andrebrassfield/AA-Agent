@@ -1,6 +1,12 @@
 import { describe, it, expect } from "bun:test";
 import { runDemo } from "../../src/demo/runner.ts";
 import { FakeCalendar } from "../../src/calendar/calendar.ts";
+import { handleBookingWorkflow } from "../../src/workflows/booking.ts";
+import { FORT_SMITH_HVAC_CONFIG } from "../../src/demo/shop_data.ts";
+import { DataStore } from "../../src/db/store.ts";
+import { handleBookingWorkflow } from "../../src/workflows/booking.ts";
+import { FORT_SMITH_HVAC_CONFIG } from "../../src/demo/shop_data.ts";
+import { DataStore } from "../../src/db/store.ts";
 
 describe("Demo Runner & Workflows", () => {
   it("runs the full demo mode without errors and logs all 4 workflows", async () => {
@@ -13,6 +19,8 @@ describe("Demo Runner & Workflows", () => {
     expect(transcriptText).toContain("Fort Smith Heating & Air");
     expect(transcriptText).toContain("[WORKFLOW 1/4] Missed-Call Text-Back");
     expect(transcriptText).toContain("[WORKFLOW 2/4] Service Booking & Calendar Scheduling");
+    expect(transcriptText).toContain("[WORKFLOW 2b/4] Service Booking Reschedule (In-Hours)");
+    expect(transcriptText).toContain("[WORKFLOW 2c/4] Service Booking Rejection (After-Hours)");
     expect(transcriptText).toContain("[WORKFLOW 3/4] Estimate Follow-up Touches");
     expect(transcriptText).toContain("[WORKFLOW 4/4] Review Request After Completed Job");
 
@@ -24,6 +32,161 @@ describe("Demo Runner & Workflows", () => {
     expect(actions).toContain("ESTIMATE_TOUCH_DAY_2");
     expect(actions).toContain("ESTIMATE_TOUCH_STOPPED");
     expect(actions).toContain("REVIEW_REQUEST_SENT");
+  });
+
+  it("manageBooking respects business hours for creation and rescheduling", async () => {
+    const store = new DataStore(":memory:");
+    const calendar = new FakeCalendar();
+    const config = FORT_SMITH_HVAC_CONFIG;
+
+    const outOfHoursRes = await handleBookingWorkflow(
+      {
+        action: "create",
+        customerName: "Late Night",
+        customerPhone: "+15555555555",
+        serviceId: "ac-tuneup",
+        requestedStartTime: "2026-11-02T20:00:00.000Z"
+      },
+      config,
+      calendar,
+      store
+    );
+    expect(outOfHoursRes.success).toBe(false);
+    expect(outOfHoursRes.error).toContain("outside business hours");
+
+    const successRes = await handleBookingWorkflow(
+      {
+        action: "create",
+        customerName: "In Hours",
+        customerPhone: "+15555555555",
+        serviceId: "ac-tuneup",
+        requestedStartTime: "2026-11-02T14:00:00.000Z" // 2 PM UTC (Safe during Fort Smith day hours)
+      },
+      config,
+      calendar,
+      store
+    );
+    expect(successRes.success).toBe(true);
+
+    const rescheduleFailRes = await handleBookingWorkflow(
+      {
+        action: "reschedule",
+        bookingId: successRes.booking!.id,
+        requestedStartTime: "2026-11-02T20:00:00.000Z"
+      },
+      config,
+      calendar,
+      store
+    );
+    expect(rescheduleFailRes.success).toBe(false);
+    expect(rescheduleFailRes.error).toContain("outside business hours");
+
+    const rescheduleSuccessRes = await handleBookingWorkflow(
+      {
+        action: "reschedule",
+        bookingId: successRes.booking!.id,
+        requestedStartTime: "2026-11-02T15:00:00.000Z"
+      },
+      config,
+      calendar,
+      store
+    );
+    expect(rescheduleSuccessRes.success).toBe(true);
+    expect(rescheduleSuccessRes.booking?.status).toBe("confirmed");
+
+    const cancelRes = await handleBookingWorkflow(
+      {
+        action: "cancel",
+        bookingId: rescheduleSuccessRes.booking!.id
+      },
+      config,
+      calendar,
+      store
+    );
+    expect(cancelRes.success).toBe(true);
+    expect(cancelRes.booking?.status).toBe("cancelled");
+  });
+
+
+  it("manageBooking respects business hours for creation and rescheduling", async () => {
+    const store = new DataStore(":memory:");
+    const calendar = new FakeCalendar();
+    const config = FORT_SMITH_HVAC_CONFIG;
+
+    // Create out of hours (Fort Smith closes at 17:00, let's try 20:00 UTC representing night time depending on offset but purely mechanically checking hours)
+    // Fort Smith mock config sets mon: { open: "08:00", close: "17:00" }
+    // Note: JS Date getUTCDay() for 2026-11-02T20:00:00.000Z is a Monday, hours are 20, > 17, so it should fail.
+
+    const outOfHoursRes = await handleBookingWorkflow(
+      {
+        action: "create",
+        customerName: "Late Night",
+        customerPhone: "+15555555555",
+        serviceId: "ac-tuneup",
+        requestedStartTime: "2026-11-02T20:00:00.000Z" // 8 PM UTC
+      },
+      config,
+      calendar,
+      store
+    );
+    expect(outOfHoursRes.success).toBe(false);
+    expect(outOfHoursRes.error).toContain("outside business hours");
+
+    // Success case
+    const successRes = await handleBookingWorkflow(
+      {
+        action: "create",
+        customerName: "In Hours",
+        customerPhone: "+15555555555",
+        serviceId: "ac-tuneup",
+        requestedStartTime: "2026-11-02T10:00:00.000Z" // 10 AM UTC
+      },
+      config,
+      calendar,
+      store
+    );
+    expect(successRes.success).toBe(true);
+
+    // Reschedule out of hours
+    const rescheduleFailRes = await handleBookingWorkflow(
+      {
+        action: "reschedule",
+        bookingId: successRes.booking!.id,
+        requestedStartTime: "2026-11-02T20:00:00.000Z"
+      },
+      config,
+      calendar,
+      store
+    );
+    expect(rescheduleFailRes.success).toBe(false);
+    expect(rescheduleFailRes.error).toContain("outside business hours");
+
+    // Reschedule valid
+    const rescheduleSuccessRes = await handleBookingWorkflow(
+      {
+        action: "reschedule",
+        bookingId: successRes.booking!.id,
+        requestedStartTime: "2026-11-02T14:00:00.000Z"
+      },
+      config,
+      calendar,
+      store
+    );
+    expect(rescheduleSuccessRes.success).toBe(true);
+    expect(rescheduleSuccessRes.booking?.status).toBe("confirmed");
+
+    // Cancel
+    const cancelRes = await handleBookingWorkflow(
+      {
+        action: "cancel",
+        bookingId: rescheduleSuccessRes.booking!.id
+      },
+      config,
+      calendar,
+      store
+    );
+    expect(cancelRes.success).toBe(true);
+    expect(cancelRes.booking?.status).toBe("cancelled");
   });
 
   it("FakeCalendar rejects conflicting booking times", async () => {
