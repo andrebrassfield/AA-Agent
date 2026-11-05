@@ -10,8 +10,24 @@
     "amount": 0
   },
   "serviceArea": {
-    "primaryZipCodes": ["72901", "72903", "72904", "72908", "72916", "72956"],
+    "primaryZipCodes": [
+      "72901",
+      "72903",
+      "72904",
+      "72908",
+      "72916",
+      "72956"
+    ],
     "maxDistanceMiles": 35
   },
-  "dailySpendCapUsd": 5.0
+  "dailySpendCapUsd": 5.0,
+  "routing": {
+    "enabled": true,
+    "geocoder": "nominatim",
+    "avgSpeedMph": 25,
+    "driveTimeBufferMinutes": 10,
+    "slotStepMinutes": 15,
+    "maxOffers": 3,
+    "horizonDays": 7
+  }
 }

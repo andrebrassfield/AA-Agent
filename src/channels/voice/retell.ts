@@ -234,6 +234,27 @@ export class RetellVoiceAdapter implements VoiceProviderAdapter {
     }
 
     if (
+      normalizedName === "offer_route_slots" ||
+      normalizedName === "route_slots" ||
+      normalizedName === "route_aware_slots" ||
+      normalizedName === "get_route_aware_slots" ||
+      normalizedName === "offer_slots"
+    ) {
+      const customerAddress = pickString(argsObj, ["customer_address", "customerAddress", "address", "service_address"]);
+      if (!customerAddress) {
+        throw new ChannelValidationError("offer_route_slots requires 'customer_address' (or 'address').");
+      }
+      return {
+        tool: "offer_route_slots",
+        providerCallId,
+        callerPhone,
+        serviceId: pickString(argsObj, ["service_id", "serviceId"]),
+        customerAddress,
+        day: pickString(argsObj, ["day", "date"]),
+      };
+    }
+
+    if (
       normalizedName === "book" ||
       normalizedName === "book_appointment" ||
       normalizedName === "create_booking"
@@ -302,6 +323,7 @@ export class RetellVoiceAdapter implements VoiceProviderAdapter {
       customerPhone,
       serviceId,
       requestedStartTime,
+      customerAddress: pickString(argsObj, ["customer_address", "customerAddress", "address", "service_address"]),
     };
   }
 
@@ -374,6 +396,12 @@ export class RetellVoiceAdapter implements VoiceProviderAdapter {
         result: result.message,
         message: result.message,
         ...(result.error ? { error: result.error } : {}),
+        ...(result.offers ? { offers: result.offers } : {}),
+        ...(result.inServiceArea !== undefined ? { in_service_area: result.inServiceArea } : {}),
+        ...(result.routeAware !== undefined ? { route_aware: result.routeAware } : {}),
+        ...(result.screenedOut ? { screened_out: true } : {}),
+        ...(result.askFirst ? { ask_first: true } : {}),
+        ...(result.suggestedReply ? { suggested_reply: result.suggestedReply } : {}),
       },
     };
   }

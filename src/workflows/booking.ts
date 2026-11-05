@@ -2,6 +2,8 @@ import type { ClientConfig } from "../types/config.ts";
 import type { DataStore } from "../db/store.ts";
 import type { CalendarAdapter } from "../calendar/calendar.ts";
 import type { Booking } from "../types/db.ts";
+import type { Geocoder } from "../routing/geo.ts";
+import { computeAddedDriveForBooking, screenService } from "../routing/offers.ts";
 
 export interface BookingWorkflowInput {
   action: "create" | "reschedule" | "cancel";
@@ -10,6 +12,13 @@ export interface BookingWorkflowInput {
   customerPhone?: string;
   serviceId?: string;
   requestedStartTime?: string;
+  /** Caller-supplied service address for in-home jobs. Stored verbatim; drives route annotation when possible. */
+  customerAddress?: string;
+}
+
+export interface BookingRouteContext {
+  geocoder?: Geocoder;
+  syntheticAllowed?: boolean;
 }
 
 export interface BookingWorkflowResult {
@@ -49,7 +58,8 @@ export async function handleBookingWorkflow(
   input: BookingWorkflowInput,
   clientConfig: ClientConfig,
   calendar: CalendarAdapter,
-  store: DataStore
+  store: DataStore,
+  routeCtx?: BookingRouteContext
 ): Promise<BookingWorkflowResult> {
   if (input.action === "cancel") {
     if (!input.bookingId) return { success: false, error: "bookingId required for cancel" };
@@ -154,6 +164,14 @@ export async function handleBookingWorkflow(
     };
   }
 
+  // Screening applies before any booking write. Route fit never overrides a decline.
+  if (screenService(service) === "decline") {
+    return {
+      success: false,
+      error: `Service "${service.name}" is not bookable by the agent (triage: decline). Take a message instead.`,
+    };
+  }
+
   const durationMs = (service.durationMinutes + (service.bufferMinutes || 0)) * 60 * 1000;
   const startTime = new Date(input.requestedStartTime);
   const endTime = new Date(startTime.getTime() + durationMs);
@@ -174,6 +192,29 @@ export async function handleBookingWorkflow(
     };
   }
 
+  // Route annotation: only when an honest estimate is possible. Never invent a drive time.
+  let assignedStaffId: string | undefined;
+  let driveTimeMinutesAdded: number | undefined;
+  if (input.customerAddress?.trim() && routeCtx?.geocoder) {
+    const route = await computeAddedDriveForBooking(
+      service,
+      startIso,
+      input.customerAddress,
+      clientConfig,
+      calendar,
+      routeCtx.geocoder,
+      { syntheticAllowed: routeCtx.syntheticAllowed }
+    );
+    if (route) {
+      assignedStaffId = route.staffId;
+      driveTimeMinutesAdded = route.driveTimeMinutesAdded;
+    }
+  }
+
+  const eventDescriptionParts = [`Service: ${service.name} ($${service.price})`];
+  if (input.customerAddress?.trim()) eventDescriptionParts.push(`Address: ${input.customerAddress.trim()}`);
+  if (assignedStaffId) eventDescriptionParts.push(`Tech: ${assignedStaffId}`);
+
   // Create calendar event
   const calendarEvent = await calendar.createEvent({
     id: store.generateId("ev"),
@@ -181,7 +222,7 @@ export async function handleBookingWorkflow(
     startTime: startIso,
     endTime: endIso,
     attendees: [input.customerPhone],
-    description: `Service: ${service.name} ($${service.price})`,
+    description: eventDescriptionParts.join("\n"),
   });
 
   const booking: Booking = {
@@ -190,10 +231,13 @@ export async function handleBookingWorkflow(
     customerPhone: input.customerPhone,
     serviceId: service.id,
     serviceName: service.name,
+    staffId: assignedStaffId,
     startTime: startIso,
     endTime: endIso,
     status: "confirmed",
     notes: `Calendar event id: ${calendarEvent.id}`,
+    customerAddress: input.customerAddress?.trim() || null,
+    driveTimeMinutesAdded: driveTimeMinutesAdded ?? null,
     createdAt: new Date().toISOString(),
   };
 
@@ -226,6 +270,14 @@ export async function handleBookingWorkflow(
       calendarEventId: calendarEvent.id,
       scheduledRemindersCount: scheduledReminders.length,
       guardrailBypassReason: "one_to_one_operational_flow",
+      ...(input.customerAddress?.trim()
+        ? {
+            customerAddress: input.customerAddress.trim(),
+            routeAware: driveTimeMinutesAdded !== undefined,
+            assignedStaffId: assignedStaffId ?? null,
+            driveTimeMinutesAdded: driveTimeMinutesAdded ?? null,
+          }
+        : {}),
     },
     timestamp: new Date().toISOString(),
   });

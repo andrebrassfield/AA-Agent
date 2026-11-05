@@ -16,5 +16,11 @@
     "maxDistanceMiles": "TODO: Maximum travel radius in miles as a number (or remove if unused)",
     "travelFee": "TODO: Out-of-area trip fee in USD as a number (or remove if unused)"
   },
-  "dailySpendCapUsd": "TODO: Daily model spend cap in USD as a positive number (e.g. 5.0)"
+  "dailySpendCapUsd": "TODO: Daily model spend cap in USD as a positive number (e.g. 5.0)",
+  "routing": {
+    "enabled": "TODO: boolean true or false (route-aware slot ranking)",
+    "geocoder": "TODO: Choose nominatim (free, no key, default) or local (synthetic, tests only)",
+    "avgSpeedMph": "TODO: Average speed in mph for drive-time estimates as a number (e.g. 25)",
+    "driveTimeBufferMinutes": "TODO: Drive-time buffer between stops in minutes as a number (e.g. 10)"
+  }
 }

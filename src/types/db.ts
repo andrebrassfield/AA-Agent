@@ -11,6 +11,10 @@ export interface Booking {
   endTime: string;   // ISO string
   status: BookingStatus;
   notes?: string;
+  /** Caller-supplied service address. Stored verbatim; never geocoded-invented. */
+  customerAddress?: string | null;
+  /** Haversine added-drive-minutes estimate at booking time. Absent when no honest estimate was possible. */
+  driveTimeMinutesAdded?: number | null;
   createdAt: string;
 }
 

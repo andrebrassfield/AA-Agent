@@ -1,0 +1,156 @@
+{
+  "simDay": "2026-11-06",
+  "tz": "America/Chicago",
+  "now": "2026-11-05T20:00:00.000Z",
+  "scenarios": [
+    {
+      "name": "proof: near caller (next door to stop 2)",
+      "result": {
+        "success": true,
+        "serviceName": "In-Home Service Visit",
+        "inServiceArea": true,
+        "serviceAreaReason": "zip 72903 in primaryZipCodes",
+        "routeAware": true,
+        "offers": [
+          {
+            "startTime": "2026-11-06T16:15:00.000Z",
+            "endTime": "2026-11-06T17:15:00.000Z",
+            "techId": "tech-1",
+            "addedDriveMinutes": 1
+          },
+          {
+            "startTime": "2026-11-06T18:45:00.000Z",
+            "endTime": "2026-11-06T19:45:00.000Z",
+            "techId": "tech-1",
+            "addedDriveMinutes": 1
+          },
+          {
+            "startTime": "2026-11-06T21:15:00.000Z",
+            "endTime": "2026-11-06T22:15:00.000Z",
+            "techId": "tech-1",
+            "addedDriveMinutes": 2
+          }
+        ],
+        "suggestedReply": "We can be there at 10:15 AM on Friday, Nov 6."
+      },
+      "topOfferLocal": {
+        "day": "2026-11-06",
+        "minutes": 615
+      }
+    },
+    {
+      "name": "proof: far caller (Greenwood, ~12 mi out)",
+      "result": {
+        "success": true,
+        "serviceName": "In-Home Service Visit",
+        "inServiceArea": true,
+        "serviceAreaReason": "within 35 mi radius of shop",
+        "routeAware": true,
+        "offers": [
+          {
+            "startTime": "2026-11-06T21:45:00.000Z",
+            "endTime": "2026-11-06T22:45:00.000Z",
+            "techId": "tech-1",
+            "addedDriveMinutes": 67
+          },
+          {
+            "startTime": "2026-11-06T22:00:00.000Z",
+            "endTime": "2026-11-06T23:00:00.000Z",
+            "techId": "tech-1",
+            "addedDriveMinutes": 67
+          },
+          {
+            "startTime": "2026-11-07T15:00:00.000Z",
+            "endTime": "2026-11-07T16:00:00.000Z",
+            "techId": "tech-1",
+            "addedDriveMinutes": 70
+          }
+        ],
+        "suggestedReply": "We can be there at 3:45 PM on Friday, Nov 6."
+      },
+      "topOfferLocal": {
+        "day": "2026-11-06",
+        "minutes": 945
+      }
+    },
+    {
+      "name": "out of area (Little Rock, ~75 mi)",
+      "result": {
+        "success": true,
+        "serviceName": "In-Home Service Visit",
+        "inServiceArea": false,
+        "serviceAreaReason": "127.2 mi from shop, beyond 35 mi radius",
+        "routeAware": true,
+        "offers": [],
+        "suggestedReply": "That address is outside our service area (127.2 mi from shop, beyond 35 mi radius), so I can't offer a time. I'll take a message and someone will get back to you."
+      }
+    },
+    {
+      "name": "packed day: far caller pushed to next open day",
+      "result": {
+        "success": true,
+        "serviceName": "In-Home Service Visit",
+        "inServiceArea": true,
+        "serviceAreaReason": "within 35 mi radius of shop",
+        "routeAware": true,
+        "offers": [
+          {
+            "startTime": "2026-11-07T15:00:00.000Z",
+            "endTime": "2026-11-07T16:00:00.000Z",
+            "techId": "tech-1",
+            "addedDriveMinutes": 70
+          },
+          {
+            "startTime": "2026-11-07T15:15:00.000Z",
+            "endTime": "2026-11-07T16:15:00.000Z",
+            "techId": "tech-1",
+            "addedDriveMinutes": 70
+          },
+          {
+            "startTime": "2026-11-07T15:30:00.000Z",
+            "endTime": "2026-11-07T16:30:00.000Z",
+            "techId": "tech-1",
+            "addedDriveMinutes": 70
+          }
+        ],
+        "suggestedReply": "We can be there at 9:00 AM on Saturday, Nov 7."
+      },
+      "topOfferLocal": {
+        "day": "2026-11-07",
+        "minutes": 540
+      }
+    },
+    {
+      "name": "geocoder failure: fallback, no drive claims",
+      "result": {
+        "success": true,
+        "serviceName": "In-Home Service Visit",
+        "inServiceArea": true,
+        "serviceAreaReason": "zip 72903 in primaryZipCodes",
+        "routeAware": false,
+        "offers": [
+          {
+            "startTime": "2026-11-06T14:00:00.000Z",
+            "endTime": "2026-11-06T15:00:00.000Z",
+            "techId": "tech-1"
+          },
+          {
+            "startTime": "2026-11-06T16:00:00.000Z",
+            "endTime": "2026-11-06T17:00:00.000Z",
+            "techId": "tech-1"
+          },
+          {
+            "startTime": "2026-11-06T16:15:00.000Z",
+            "endTime": "2026-11-06T17:15:00.000Z",
+            "techId": "tech-1"
+          }
+        ],
+        "suggestedReply": "Next open time. We can be there at 8:00 AM on Friday, Nov 6."
+      },
+      "topOfferLocal": {
+        "day": "2026-11-06",
+        "minutes": 480
+      }
+    }
+  ]
+}

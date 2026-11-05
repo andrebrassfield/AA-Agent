@@ -15,11 +15,18 @@ export class CoreEngine implements EngineAdapter {
     if (!toolCall || typeof toolCall !== "object") {
       return ["Tool call must be a JSON object."];
     }
-    if (toolCall.name !== "manageBooking") {
-      errors.push(`Unknown tool "${toolCall.name}". Only "manageBooking" is supported.`);
+    if (toolCall.name !== "manageBooking" && toolCall.name !== "offerRouteSlots") {
+      errors.push(`Unknown tool "${toolCall.name}". Only "manageBooking" and "offerRouteSlots" are supported.`);
     }
     if (!toolCall.args || typeof toolCall.args !== "object") {
       errors.push("Missing or invalid 'args' object.");
+      return errors;
+    }
+    if (toolCall.name === "offerRouteSlots") {
+      const args = toolCall.args;
+      if (typeof args.serviceId !== "string") errors.push("args.serviceId is required as a string for 'offerRouteSlots'.");
+      if (typeof args.customerAddress !== "string" || !args.customerAddress.trim()) errors.push("args.customerAddress is required as a non-empty string for 'offerRouteSlots'.");
+      if (args.day !== undefined && typeof args.day !== "string") errors.push("args.day must be a string (YYYY-MM-DD) when provided.");
       return errors;
     }
     const { action, bookingId, input } = toolCall.args;
@@ -68,9 +75,12 @@ Greeting: ${context.clientConfig.persona.greeting}.
 Available services: ${context.clientConfig.services.services.map((s) => `${s.name} (id: ${s.id}, $${s.price}, ${s.durationMinutes}m)`).join(", ")}.
 
 If asked to book, confirm the service, date/time, customer name, and phone number.
+For in-home services, when the caller gives a street address, first call offerRouteSlots to get route-ranked exact times, then offer the best one in plain words (e.g. "We can be there at 10:45."). Never quote a drive time the tool did not return; if the tool says the address is outside the service area, do not offer a slot, take a message instead.
 If details are missing, ask for them politely.
 Once you have all details to create, reschedule, or cancel a booking, output exactly this JSON block on its own line:
-<tool_call>{"name": "manageBooking", "args": {"action": "create|reschedule|cancel", "bookingId": "optional_id", "input": {"customerName": "...", "customerPhone": "...", "serviceId": "...", "requestedStartTime": "ISO_String"}}}</tool_call>
+<tool_call>{"name": "manageBooking", "args": {"action": "create|reschedule|cancel", "bookingId": "optional_id", "input": {"customerName": "...", "customerPhone": "...", "serviceId": "...", "requestedStartTime": "ISO_String", "customerAddress": "optional street address"}}}</tool_call>
+To offer route-aware times, output exactly this JSON block on its own line:
+<tool_call>{"name": "offerRouteSlots", "args": {"serviceId": "...", "customerAddress": "...", "day": "optional YYYY-MM-DD"}}</tool_call>
 `;
 
     const messages: ModelMessage[] = [
