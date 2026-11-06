@@ -172,6 +172,19 @@ export function validateServicesConfig(data: unknown): ValidationResult<Services
     if (service.bufferMinutes !== undefined && !isTodoPlaceholder(service.bufferMinutes) && !isNumber(service.bufferMinutes)) {
       errors.push({ field: `services[${index}].bufferMinutes`, message: "bufferMinutes must be a number" });
     }
+    if (service.inHome !== undefined && !isTodoPlaceholder(service.inHome) && typeof service.inHome !== "boolean") {
+      errors.push({ field: `services[${index}].inHome`, message: "inHome must be a boolean" });
+    }
+    if (service.bookingRules !== undefined && !isTodoPlaceholder(service.bookingRules)) {
+      if (!isObject(service.bookingRules)) {
+        errors.push({ field: `services[${index}].bookingRules`, message: "bookingRules must be an object" });
+      } else if (
+        service.bookingRules.triage !== undefined &&
+        (typeof service.bookingRules.triage !== "string" || !["book", "ask_first", "decline"].includes(service.bookingRules.triage))
+      ) {
+        errors.push({ field: `services[${index}].bookingRules.triage`, message: "triage must be one of: book, ask_first, decline" });
+      }
+    }
   });
 
   collectTodoIssues(data, "", errors);
@@ -288,6 +301,77 @@ export function validatePoliciesConfig(data: unknown): ValidationResult<Policies
   } else {
     if (!Array.isArray(data.serviceArea.primaryZipCodes) || data.serviceArea.primaryZipCodes.length === 0) {
       errors.push({ field: "serviceArea.primaryZipCodes", message: "primaryZipCodes must be a non-empty array of strings" });
+    }
+    if (
+      data.serviceArea.maxDistanceMiles !== undefined &&
+      !isTodoPlaceholder(data.serviceArea.maxDistanceMiles) &&
+      (!isNumber(data.serviceArea.maxDistanceMiles) || data.serviceArea.maxDistanceMiles <= 0)
+    ) {
+      errors.push({ field: "serviceArea.maxDistanceMiles", message: "maxDistanceMiles must be a positive number when specified" });
+    }
+    if (
+      data.serviceArea.radiusMiles !== undefined &&
+      !isTodoPlaceholder(data.serviceArea.radiusMiles) &&
+      (!isNumber(data.serviceArea.radiusMiles) || data.serviceArea.radiusMiles <= 0)
+    ) {
+      errors.push({ field: "serviceArea.radiusMiles", message: "radiusMiles must be a positive number when specified" });
+    }
+    if (
+      data.serviceArea.travelFee !== undefined &&
+      !isTodoPlaceholder(data.serviceArea.travelFee) &&
+      (!isNumber(data.serviceArea.travelFee) || data.serviceArea.travelFee < 0)
+    ) {
+      errors.push({ field: "serviceArea.travelFee", message: "travelFee must be a non-negative number when specified" });
+    }
+    if (data.serviceArea.polygon !== undefined && !isTodoPlaceholder(data.serviceArea.polygon)) {
+      const poly = data.serviceArea.polygon;
+      if (
+        !Array.isArray(poly) ||
+        poly.length < 3 ||
+        !poly.every(
+          (p) =>
+            isObject(p) &&
+            isNumber(p.lat) && p.lat >= -90 && p.lat <= 90 &&
+            isNumber(p.lng) && p.lng >= -180 && p.lng <= 180
+        )
+      ) {
+        errors.push({ field: "serviceArea.polygon", message: "polygon must be an array of at least 3 {lat,lng} vertices" });
+      }
+    }
+  }
+
+  if (data.routing !== undefined && !isTodoPlaceholder(data.routing)) {
+    if (!isObject(data.routing)) {
+      errors.push({ field: "routing", message: "routing must be an object when specified" });
+    } else {
+      const r = data.routing;
+      if (r.enabled !== undefined && typeof r.enabled !== "boolean") {
+        errors.push({ field: "routing.enabled", message: "routing.enabled must be a boolean" });
+      }
+      if (r.geocoder !== undefined && r.geocoder !== "local" && r.geocoder !== "nominatim") {
+        errors.push({ field: "routing.geocoder", message: "routing.geocoder must be 'local' or 'nominatim'" });
+      }
+      if (r.allowSyntheticGeocoder !== undefined && typeof r.allowSyntheticGeocoder !== "boolean") {
+        errors.push({ field: "routing.allowSyntheticGeocoder", message: "routing.allowSyntheticGeocoder must be a boolean" });
+      }
+      if (r.avgSpeedMph !== undefined && !isTodoPlaceholder(r.avgSpeedMph) && (!isNumber(r.avgSpeedMph) || r.avgSpeedMph <= 0)) {
+        errors.push({ field: "routing.avgSpeedMph", message: "routing.avgSpeedMph must be a positive number" });
+      }
+      if (r.driveTimeBufferMinutes !== undefined && !isTodoPlaceholder(r.driveTimeBufferMinutes) && (!isNumber(r.driveTimeBufferMinutes) || r.driveTimeBufferMinutes < 0)) {
+        errors.push({ field: "routing.driveTimeBufferMinutes", message: "routing.driveTimeBufferMinutes must be a non-negative number" });
+      }
+      if (r.slotStepMinutes !== undefined && !isTodoPlaceholder(r.slotStepMinutes) && (!isNumber(r.slotStepMinutes) || r.slotStepMinutes < 5 || r.slotStepMinutes > 120)) {
+        errors.push({ field: "routing.slotStepMinutes", message: "routing.slotStepMinutes must be a number between 5 and 120" });
+      }
+      if (r.maxOffers !== undefined && !isTodoPlaceholder(r.maxOffers) && (!isNumber(r.maxOffers) || r.maxOffers < 1 || r.maxOffers > 10)) {
+        errors.push({ field: "routing.maxOffers", message: "routing.maxOffers must be a number between 1 and 10" });
+      }
+      if (r.horizonDays !== undefined && !isTodoPlaceholder(r.horizonDays) && (!isNumber(r.horizonDays) || r.horizonDays < 1 || r.horizonDays > 30)) {
+        errors.push({ field: "routing.horizonDays", message: "routing.horizonDays must be a number between 1 and 30" });
+      }
+      if (r.nominatimBaseUrl !== undefined && !isTodoPlaceholder(r.nominatimBaseUrl) && (typeof r.nominatimBaseUrl !== "string" || !/^https?:\/\//.test(r.nominatimBaseUrl))) {
+        errors.push({ field: "routing.nominatimBaseUrl", message: "routing.nominatimBaseUrl must be an http(s) URL" });
+      }
     }
   }
 

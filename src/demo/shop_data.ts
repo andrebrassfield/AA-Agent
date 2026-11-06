@@ -97,6 +97,15 @@ export const FORT_SMITH_HVAC_CONFIG: ClientConfig = {
       primaryZipCodes: ["72901", "72903", "72904", "72908", "72916", "72956"],
       maxDistanceMiles: 35,
     },
+    routing: {
+      enabled: true,
+      geocoder: "nominatim",
+      avgSpeedMph: 25,
+      driveTimeBufferMinutes: 10,
+      slotStepMinutes: 15,
+      maxOffers: 3,
+      horizonDays: 7,
+    },
   },
   channels: {
     voice: { provider: "retell" },

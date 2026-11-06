@@ -15,6 +15,7 @@ import {
   isWithinBusinessHours,
   type BookingWorkflowResult,
 } from "../workflows/booking.ts";
+import { createGeocoderFromConfig, offerRouteAwareSlots } from "../routing/offers.ts";
 import { stopOpenEstimatesForCustomerReply } from "../workflows/estimate.ts";
 import { handleMissedCallTextBack } from "../workflows/missed_call.ts";
 import {
@@ -380,6 +381,62 @@ export class ChannelCoordinator {
       };
     }
 
+    if (toolCall.tool === "offer_route_slots") {
+      if (!toolCall.serviceId) {
+        return {
+          success: false,
+          tool: "offer_route_slots",
+          message: "serviceId is required to offer route-aware slots.",
+          error: "Missing serviceId",
+        };
+      }
+      const { geocoder, synthetic } = createGeocoderFromConfig(this.clientConfig);
+      const result = await offerRouteAwareSlots(
+        {
+          serviceId: toolCall.serviceId,
+          customerAddress: toolCall.customerAddress ?? "",
+          day: toolCall.day,
+        },
+        this.clientConfig,
+        this.calendar,
+        geocoder,
+        { syntheticAllowed: synthetic }
+      );
+      session.toolActionsSummary.push(
+        `Offered route-aware slots for ${toolCall.serviceId} at ${toolCall.customerAddress}: routeAware=${result.routeAware} inServiceArea=${result.inServiceArea ?? "n/a"} offers=${result.offers.length}${result.screenedOut ? " (screened out: decline)" : ""}.`
+      );
+      this.store.logAudit({
+        id: this.store.generateId("aud-vrouteslots"),
+        action: "VOICE_TOOL_ROUTE_SLOTS_OFFERED",
+        entityType: "call",
+        entityId: toolCall.providerCallId,
+        details: {
+          serviceId: toolCall.serviceId,
+          customerAddress: toolCall.customerAddress,
+          routeAware: result.routeAware,
+          inServiceArea: result.inServiceArea ?? null,
+          serviceAreaReason: result.serviceAreaReason ?? null,
+          screenedOut: result.screenedOut ?? false,
+          askFirst: result.askFirst ?? false,
+          offerCount: result.offers.length,
+          topOffer: result.offers[0] ?? null,
+        },
+        timestamp: new Date().toISOString(),
+      });
+      return {
+        success: result.success,
+        tool: "offer_route_slots",
+        message: result.suggestedReply,
+        ...(result.error ? { error: result.error } : {}),
+        offers: result.offers,
+        inServiceArea: result.inServiceArea,
+        routeAware: result.routeAware,
+        screenedOut: result.screenedOut,
+        askFirst: result.askFirst,
+        suggestedReply: result.suggestedReply,
+      };
+    }
+
     if (toolCall.tool === "book_appointment") {
       const customerPhone = toolCall.customerPhone || callerPhone;
       if (!customerPhone) {
@@ -394,6 +451,7 @@ export class ChannelCoordinator {
         session.callerPhone = customerPhone;
       }
 
+      const { geocoder, synthetic } = createGeocoderFromConfig(this.clientConfig);
       const res = await handleBookingWorkflow(
         {
           action: "create",
@@ -401,10 +459,12 @@ export class ChannelCoordinator {
           customerPhone,
           serviceId: toolCall.serviceId,
           requestedStartTime: toolCall.requestedStartTime,
+          customerAddress: toolCall.customerAddress,
         },
         this.clientConfig,
         this.calendar,
-        this.store
+        this.store,
+        { geocoder, syntheticAllowed: synthetic }
       );
 
       if (!res.success || !res.booking) {
@@ -815,6 +875,39 @@ export class ChannelCoordinator {
     let replyText = turn.reply;
     let bookingCreatedId: string | undefined;
 
+    if (turn.actionTaken?.type === "TOOL_CALL" && turn.actionTaken.details?.name === "offerRouteSlots") {
+      const args = turn.actionTaken.details.args as { serviceId?: string; customerAddress?: string; day?: string };
+      const { geocoder, synthetic } = createGeocoderFromConfig(this.clientConfig);
+      const result = await offerRouteAwareSlots(
+        {
+          serviceId: args.serviceId ?? "",
+          customerAddress: args.customerAddress ?? "",
+          day: args.day,
+        },
+        this.clientConfig,
+        this.calendar,
+        geocoder,
+        { syntheticAllowed: synthetic }
+      );
+      this.store.logAudit({
+        id: this.store.generateId("aud-sms-routeslots"),
+        action: "SMS_ROUTE_SLOTS_OFFERED",
+        entityType: "sms",
+        entityId: event.providerMessageId,
+        details: {
+          customerPhone: event.from,
+          serviceId: args.serviceId ?? null,
+          routeAware: result.routeAware,
+          inServiceArea: result.inServiceArea ?? null,
+          screenedOut: result.screenedOut ?? false,
+          offerCount: result.offers.length,
+          topOffer: result.offers[0] ?? null,
+        },
+        timestamp: new Date().toISOString(),
+      });
+      replyText = result.success ? result.suggestedReply : `Sorry, I couldn't check times right now: ${result.error || "unknown error"}`;
+    }
+
     if (turn.actionTaken?.type === "TOOL_CALL" && turn.actionTaken.details?.name === "manageBooking") {
       const rawArgs = turn.actionTaken.details.args as {
         action: "create" | "reschedule" | "cancel";
@@ -824,9 +917,11 @@ export class ChannelCoordinator {
           customerPhone?: string;
           serviceId?: string;
           requestedStartTime?: string;
+          customerAddress?: string;
         };
       };
 
+      const { geocoder, synthetic } = createGeocoderFromConfig(this.clientConfig);
       const bookingResult = await handleBookingWorkflow(
         {
           action: rawArgs.action,
@@ -835,10 +930,12 @@ export class ChannelCoordinator {
           customerPhone: rawArgs.input?.customerPhone || event.from,
           serviceId: rawArgs.input?.serviceId,
           requestedStartTime: rawArgs.input?.requestedStartTime,
+          customerAddress: rawArgs.input?.customerAddress,
         },
         this.clientConfig,
         this.calendar,
-        this.store
+        this.store,
+        { geocoder, syntheticAllowed: synthetic }
       );
 
       if (bookingResult.success && bookingResult.booking) {

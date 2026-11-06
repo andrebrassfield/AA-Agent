@@ -35,6 +35,8 @@ export interface BusinessConfig {
   };
 }
 
+export type ServiceTriage = "book" | "ask_first" | "decline";
+
 export interface ServiceItem {
   id: string;
   name: string;
@@ -42,12 +44,16 @@ export interface ServiceItem {
   durationMinutes: number;
   price: number;
   bufferMinutes: number;
+  /** Route-aware booking applies to in-home services. Defaults to true; set false to opt out. */
+  inHome?: boolean;
   bookingRules?: {
     leadTimeHours?: number;
     requiresDeposit?: boolean;
     depositAmount?: number;
     allowOnlineBooking?: boolean;
     assignedStaffIds?: string[];
+    /** Screening before any slot ranking. "decline" can never be overridden by route fit. */
+    triage?: ServiceTriage;
   };
 }
 
@@ -62,6 +68,13 @@ export interface StaffMember {
   phone?: string;
   email?: string;
   skills?: string[];
+  /** Optional per-tech home base; defaults to business.address (shop). */
+  homeBase?: {
+    street: string;
+    city: string;
+    state: string;
+    zip: string;
+  };
   schedule?: {
     [dayOfWeek: string]: {
       start: string;
@@ -92,6 +105,41 @@ export interface QuietHoursPolicy {
   timezone?: string; // Optional IANA timezone override; defaults to business.timezone
 }
 
+export interface ServiceAreaConfig {
+  primaryZipCodes: string[];
+  maxDistanceMiles?: number;
+  /** Explicit radius around the shop home base; overrides maxDistanceMiles when set. */
+  radiusMiles?: number;
+  /** Optional polygon (lat/lng vertices). Any matching criterion (zip, polygon, radius) admits. */
+  polygon?: { lat: number; lng: number }[];
+  travelFee?: number;
+}
+
+export interface RoutingConfig {
+  /** Route-aware slot ranking on/off. Default true. */
+  enabled?: boolean;
+  /**
+   * Drive-time/geocode source choice carried by client config.
+   * "nominatim" (default) = free OSM HTTP, no account/key. "local" = synthetic hash geocoder,
+   * only usable when allowSyntheticGeocoder is true (tests/demo/simulator). v1 distance
+   * estimate is haversine; no paid routing API is called. Spend caps (dailySpendCapUsd)
+   * already govern any future paid provider.
+   */
+  geocoder?: "local" | "nominatim";
+  allowSyntheticGeocoder?: boolean;
+  /** Average speed for haversine drive-time estimates. Default 25 mph. */
+  avgSpeedMph?: number;
+  /** Drive-time buffer preference: extra minutes required between adjacent stops on a route. Default 10. */
+  driveTimeBufferMinutes?: number;
+  /** Candidate slot step in minutes. Default 15. */
+  slotStepMinutes?: number;
+  /** How many ranked offers to return. Default 3. */
+  maxOffers?: number;
+  /** How many days ahead to search. Default 7. */
+  horizonDays?: number;
+  nominatimBaseUrl?: string;
+}
+
 export interface PoliciesConfig {
   cancellation: {
     noticePeriodHours: number;
@@ -103,11 +151,8 @@ export interface PoliciesConfig {
     type: "fixed" | "percentage";
     amount: number;
   };
-  serviceArea: {
-    primaryZipCodes: string[];
-    maxDistanceMiles?: number;
-    travelFee?: number;
-  };
+  serviceArea: ServiceAreaConfig;
+  routing?: RoutingConfig;
   dailySpendCapUsd?: number;
   quietHours?: QuietHoursPolicy;
   followUpTickIntervalMs?: number;

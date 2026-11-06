@@ -67,7 +67,9 @@ export class DataStore {
         endTime TEXT NOT NULL,
         status TEXT NOT NULL,
         notes TEXT,
-        createdAt TEXT NOT NULL
+        createdAt TEXT NOT NULL,
+        customerAddress TEXT,
+        driveTimeMinutesAdded REAL
       );
 
       CREATE TABLE IF NOT EXISTS call_logs (
@@ -174,6 +176,8 @@ export class DataStore {
     this.ensureColumn("scheduled_followups", "claimedAt", "TEXT");
     this.ensureColumn("scheduled_followups", "sentAt", "TEXT");
     this.ensureColumn("scheduled_followups", "lastError", "TEXT");
+    this.ensureColumn("bookings", "customerAddress", "TEXT");
+    this.ensureColumn("bookings", "driveTimeMinutesAdded", "REAL");
   }
 
   private ensureColumn(table: string, column: string, definition: string): void {
@@ -188,8 +192,8 @@ export class DataStore {
     const id = booking.id || this.generateId("bk");
     const createdAt = booking.createdAt || new Date().toISOString();
     const stmt = this.db.prepare(`
-      INSERT INTO bookings (id, customerName, customerPhone, serviceId, serviceName, staffId, startTime, endTime, status, notes, createdAt)
-      VALUES ($id, $customerName, $customerPhone, $serviceId, $serviceName, $staffId, $startTime, $endTime, $status, $notes, $createdAt)
+      INSERT INTO bookings (id, customerName, customerPhone, serviceId, serviceName, staffId, startTime, endTime, status, notes, createdAt, customerAddress, driveTimeMinutesAdded)
+      VALUES ($id, $customerName, $customerPhone, $serviceId, $serviceName, $staffId, $startTime, $endTime, $status, $notes, $createdAt, $customerAddress, $driveTimeMinutesAdded)
     `);
     stmt.run({
       $id: id,
@@ -203,6 +207,8 @@ export class DataStore {
       $status: booking.status,
       $notes: booking.notes || null,
       $createdAt: createdAt,
+      $customerAddress: booking.customerAddress ?? null,
+      $driveTimeMinutesAdded: booking.driveTimeMinutesAdded ?? null,
     });
     return id;
   }

@@ -92,6 +92,15 @@ export type NormalizedVoiceToolCall =
       endTime?: string;
     }
   | {
+      tool: "offer_route_slots";
+      providerCallId: string;
+      callerPhone?: string;
+      serviceId?: string;
+      customerAddress?: string;
+      /** Local day YYYY-MM-DD to start the search. */
+      day?: string;
+    }
+  | {
       tool: "book_appointment";
       providerCallId: string;
       callerPhone?: string;
@@ -99,6 +108,7 @@ export type NormalizedVoiceToolCall =
       customerPhone?: string;
       serviceId: string;
       requestedStartTime: string;
+      customerAddress?: string;
     }
   | {
       tool: "reschedule_appointment";
@@ -127,6 +137,13 @@ export interface NormalizedVoiceToolResult {
   booking?: Booking;
   message: string;
   error?: string;
+  // Route-aware offer fields (offer_route_slots)
+  offers?: unknown[];
+  inServiceArea?: boolean;
+  routeAware?: boolean;
+  screenedOut?: boolean;
+  askFirst?: boolean;
+  suggestedReply?: string;
 }
 
 export interface ProviderHttpPayload {
